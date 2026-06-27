@@ -25,6 +25,18 @@ if(ENABLE_CLANG_TIDY)
 
 endif()
 
+find_package(Doxygen)
+
+if(DOXYGEN_FOUND)
+
+    add_custom_target(doc
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating API documentation"
+    )
+
+endif()
+
 include(CTest)
 
 if(BUILD_TESTING)
