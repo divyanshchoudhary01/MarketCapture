@@ -1,8 +1,7 @@
-#include<iostream>
+#include <iostream>
 
 int main()
 {
-
-	std::cout<<"Market Capture\n";
-	return 0;
+    std::cout << "Market Capture\n";
+    return 0;
 }
