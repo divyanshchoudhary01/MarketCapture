@@ -50,9 +50,12 @@ include(StaticAnalyzers)
 add_executable(MarketCapture
     src/main.cpp
 )
+
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+add_subdirectory(benchmarks)
 # ------------------------------------------------------------------------------
 # Include Directories
 # ------------------------------------------------------------------------------
@@ -68,3 +71,4 @@ target_include_directories(MarketCapture
 
 enable_compiler_warnings(MarketCapture)
 enable_sanitizers(MarketCapture)
+
