@@ -1,0 +1,85 @@
+---
+# ==============================================================================
+# MarketCapture - clang-format Configuration
+# ==============================================================================
+
+BasedOnStyle: LLVM
+Language: Cpp
+
+# ------------------------------------------------------------------------------
+# C++ Standard
+# ------------------------------------------------------------------------------
+Standard: c++20
+
+# ------------------------------------------------------------------------------
+# Indentation
+# ------------------------------------------------------------------------------
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# ------------------------------------------------------------------------------
+# Line Length
+# ------------------------------------------------------------------------------
+ColumnLimit: 100
+
+# ------------------------------------------------------------------------------
+# Braces
+# ------------------------------------------------------------------------------
+BreakBeforeBraces: Allman
+
+# ------------------------------------------------------------------------------
+# Short Statements
+# ------------------------------------------------------------------------------
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+
+# ------------------------------------------------------------------------------
+# Alignment
+# ------------------------------------------------------------------------------
+PointerAlignment: Left
+ReferenceAlignment: Left
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+AlignTrailingComments: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+
+# ------------------------------------------------------------------------------
+# Includes
+# ------------------------------------------------------------------------------
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# ------------------------------------------------------------------------------
+# Spaces
+# ------------------------------------------------------------------------------
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# ------------------------------------------------------------------------------
+# Namespaces
+# ------------------------------------------------------------------------------
+NamespaceIndentation: All
+FixNamespaceComments: true
+
+# ------------------------------------------------------------------------------
+# Access Specifiers
+# ------------------------------------------------------------------------------
+AccessModifierOffset: -4
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+# ------------------------------------------------------------------------------
+# Misc
+# ------------------------------------------------------------------------------
+Cpp11BracedListStyle: true
+ReflowComments: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+DerivePointerAlignment: false
+IndentPPDirectives: None
+SortUsingDeclarations: Lexicographic
