@@ -1,0 +1,45 @@
+cmake_minimum_required(VERSION 3.25)
+
+project(
+    MarketCapture
+    VERSION 0.1.0
+    DESCRIPTION "Production-grade low-latency market data platform"
+    LANGUAGES CXX
+)
+
+# ------------------------------------------------------------------------------
+# CMake Modules
+# ------------------------------------------------------------------------------
+
+list(APPEND CMAKE_MODULE_PATH
+    "${CMAKE_SOURCE_DIR}/cmake"
+)
+
+include(StandardProjectSettings)
+include(CompilerWarnings)
+include(Sanitizers)
+include(StaticAnalyzers)
+
+# ------------------------------------------------------------------------------
+# Executable
+# ------------------------------------------------------------------------------
+
+add_executable(MarketCapture
+    src/main.cpp
+)
+
+# ------------------------------------------------------------------------------
+# Include Directories
+# ------------------------------------------------------------------------------
+
+target_include_directories(MarketCapture
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+# ------------------------------------------------------------------------------
+# Compiler Configuration
+# ------------------------------------------------------------------------------
+
+enable_compiler_warnings(MarketCapture)
+enable_sanitizers(MarketCapture)
