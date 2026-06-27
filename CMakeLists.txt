@@ -25,7 +25,11 @@ if(ENABLE_CLANG_TIDY)
 
 endif()
 
+include(CTest)
 
+if(BUILD_TESTING)
+    enable_testing()
+endif()
 # ------------------------------------------------------------------------------
 # CMake Modules
 # ------------------------------------------------------------------------------
@@ -46,7 +50,9 @@ include(StaticAnalyzers)
 add_executable(MarketCapture
     src/main.cpp
 )
-
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 # ------------------------------------------------------------------------------
 # Include Directories
 # ------------------------------------------------------------------------------
