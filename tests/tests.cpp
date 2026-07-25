@@ -12,6 +12,7 @@
 #include "marketcapture/metrics.hpp"
 #include "marketcapture/moldudp64.hpp"
 #include "marketcapture/mmap_store.hpp"
+#include "marketcapture/rotating_store.hpp"
 #include "marketcapture/order_book.hpp"
 #include "marketcapture/pipeline.hpp"
 #include "marketcapture/pcap.hpp"
@@ -324,6 +325,28 @@ void test_mmap_zstd_store() {
     std::filesystem::remove(path);
 }
 
+void test_rotating_store_retention() {
+    const auto directory = std::filesystem::temp_directory_path() /
+                           "marketcapture_rotating_store";
+    std::filesystem::remove_all(directory);
+    marketcapture::RetentionPolicy policy;
+    policy.segment_capacity_bytes = 64 * 1024;
+    policy.max_raw_bytes_per_segment = 1024;
+    policy.max_segments = 2;
+    policy.max_total_bytes = 2 * policy.segment_capacity_bytes;
+    {
+        marketcapture::RotatingMappedStore store(directory, policy);
+        const std::vector<std::uint8_t> block(700, 'R');
+        store.append(block);
+        store.append(block);
+        store.append(block);
+        store.flush();
+        CHECK(store.rotations() == 2);
+        CHECK(store.segments().size() == 2);
+    }
+    std::filesystem::remove_all(directory);
+}
+
 void test_hardware_adapters() {
     std::vector<std::uint8_t> frame(14 + 20 + 8 + 4);
     frame[12] = 0x08; frame[13] = 0x00;
@@ -384,6 +407,7 @@ int main() {
     test_metrics(); test_config(); test_router_and_checkpoint();
     test_arbitration_and_pcap(); test_simulator_and_latency(); test_malformed_prefixes();
     test_mmap_zstd_store();
+    test_rotating_store_retention();
     test_hardware_adapters();
     test_linux_batch_receiver();
     if (failures) return 1;

@@ -25,6 +25,7 @@ add_library(marketcapture
     src/pipeline.cpp
     src/order_book.cpp
     src/recorder.cpp
+    src/rotating_store.cpp
     src/live_feed.cpp
     src/linux_batch_receiver.cpp
     src/mmap_store.cpp

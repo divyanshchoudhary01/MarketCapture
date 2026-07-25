@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- mmap/Zstd block-boundary segment rotation with count and byte retention
+- Linux benchmark/perf evidence bundle and flamegraph rendering workflow
+- Licensed-feed acceptance evidence script and portfolio demo/resume narrative
+- Release-triggered evidence artifact workflow
+
 ## v1.1.0
 
 ### Added

@@ -5,6 +5,7 @@
 #include "marketcapture/itch.hpp"
 #include "marketcapture/pcap.hpp"
 #include "marketcapture/mmap_store.hpp"
+#include "marketcapture/rotating_store.hpp"
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -22,6 +23,7 @@ int main(int argc, char** argv) {
         const auto pcap_path = output / "simulated-feed.pcap";
         const auto checkpoint_path = output / "books.checkpoint";
         const auto mapped_path = output / "compressed-ticks.mcz";
+        const auto segment_path = output / "segments";
 
         marketcapture::ExchangeSimulator simulator(0xC0FFEE,
             {"AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA"});
@@ -48,6 +50,18 @@ int main(int argc, char** argv) {
         mapped_store.append(raw_ticks, 3);
         mapped_store.flush();
         const auto mapped_stats = mapped_store.stats();
+        std::filesystem::remove_all(segment_path);
+        marketcapture::RetentionPolicy retention;
+        retention.segment_capacity_bytes = 512 * 1024;
+        retention.max_raw_bytes_per_segment = 128 * 1024;
+        retention.max_segments = 3;
+        retention.max_total_bytes = 3 * retention.segment_capacity_bytes;
+        marketcapture::RotatingMappedStore rotating_store(segment_path, retention);
+        constexpr std::size_t chunk_size = 64 * 1024;
+        for (std::size_t offset = 0; offset < raw_ticks.size(); offset += chunk_size)
+            rotating_store.append(std::span(raw_ticks).subspan(
+                offset, std::min(chunk_size, raw_ticks.size() - offset)), 3);
+        rotating_store.flush();
 
         marketcapture::PcapRecoverySource recovery_source(pcap_path);
         marketcapture::ItchParser parser;
@@ -106,6 +120,8 @@ int main(int argc, char** argv) {
                   << "  restart_verified: yes\n"
                   << "  mmap_zstd_raw_bytes: " << mapped_stats.raw_bytes << '\n'
                   << "  mmap_zstd_compressed_bytes: " << mapped_stats.compressed_bytes << '\n'
+                  << "  storage_rotations: " << rotating_store.rotations() << '\n'
+                  << "  retained_segments: " << rotating_store.segments().size() << '\n'
                   << "  processing_messages_per_second: "
                   << static_cast<std::uint64_t>(packet_count / seconds) << '\n'
                   << "  pcap: " << pcap_path.string() << '\n';

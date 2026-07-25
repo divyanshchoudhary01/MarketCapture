@@ -22,6 +22,8 @@ engineering for HFT-oriented systems roles.
 - Optional DPDK burst source that strips Ethernet/IPv4/UDP into MoldUDP64 payloads
 - Linux `recvmmsg` batching and optional fixed-buffer `io_uring` receive queues
 - Versioned 128-byte FPGA DMA event ABI with acquire/release ownership
+- Checksummed mmap/Zstd segment rotation with bounded retention
+- Reproducible Linux evidence, profiling, feed-acceptance, and demo workflows
 
 ## Roadmap status
 
@@ -106,6 +108,9 @@ Design and evidence:
 - [Profiling and optimization notes](docs/benchmarks/profiling.md)
 - [mmap Zstd store](docs/design/MmapZstdStore.md)
 - [Hardware acceleration adapters](docs/design/HardwareAcceleration.md)
+- [Storage rotation and retention](docs/design/StorageRetention.md)
+- [Reproducible evidence workflow](docs/benchmarks/EVIDENCE.md)
+- [Demo and resume narrative](docs/DEMO_AND_RESUME.md)
 
 On multi-config Windows generators the executable is under `build/Release`.
 
@@ -152,6 +157,8 @@ order.
 - DPDK builds with `-DMARKETCAPTURE_ENABLE_DPDK=ON` and requires an initialized
   EAL port/queue. Physical NIC and FPGA claims require the target hardware.
 - io_uring builds with `-DMARKETCAPTURE_ENABLE_IO_URING=ON` and `liburing-dev`.
+- Licensed-feed proof requires provider entitlement and a routed market-data
+  network; this repository supplies the receiver and acceptance script.
 
 ## License
 
