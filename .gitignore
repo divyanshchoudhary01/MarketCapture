@@ -30,6 +30,7 @@ build.ninja
 *.out
 data/
 evidence/
+output/pdf/*.pdf
 *.itch
 *.pcap
 *.ticks
