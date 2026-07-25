@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
         std::unique_ptr<marketcapture::FeedArbitrator> arbitrator;
         arbitrator = std::make_unique<marketcapture::FeedArbitrator>(
             [&](const marketcapture::ArbitratedMessage& message) {
-                books.apply(parser.parse(message.payload));
+                books.apply(parser.parse(message.payload()));
                 ++delivered;
             },
             [&](const marketcapture::RecoveryRequest& request) {

@@ -11,6 +11,7 @@ option(MARKETCAPTURE_ENABLE_DPDK "Build the DPDK burst packet source" OFF)
 option(MARKETCAPTURE_ENABLE_IO_URING "Build the Linux io_uring receiver" OFF)
 
 add_library(marketcapture
+    src/arena_book.cpp
     src/book_router.cpp
     src/checkpoint.cpp
     src/itch.cpp
@@ -19,6 +20,7 @@ add_library(marketcapture
     src/feed_arbitrator.cpp
     src/fpga_ring.cpp
     src/hardware_timestamp.cpp
+    src/hot_event.cpp
     src/dpdk_source.cpp
     src/moldudp64.cpp
     src/pcap.cpp

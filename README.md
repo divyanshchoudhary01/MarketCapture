@@ -25,6 +25,8 @@ engineering for HFT-oriented systems roles.
 - Checksummed mmap/Zstd segment rotation with bounded retention
 - Reproducible Linux evidence, profiling, feed-acceptance, and demo workflows
 - Preallocated ingress pool with parser-to-book/recorder/metrics SPSC fan-out
+- Fixed-width hot events, bounded circular arbitration, PMR arena books, and
+  asynchronous PCAP persistence
 
 ## Roadmap status
 

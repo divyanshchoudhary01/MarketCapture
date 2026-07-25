@@ -14,8 +14,13 @@ namespace marketcapture {
 struct ThreadedEngineConfig {
     std::size_t book_shards{8};
     std::filesystem::path record_path;
+    std::filesystem::path pcap_path;
     std::optional<std::uint64_t> initial_sequence;
     std::size_t max_reorder_messages{65536};
+    std::size_t book_arena_bytes{128 * 1024 * 1024};
+    std::size_t max_orders{1'000'000};
+    std::size_t max_levels{500'000};
+    std::size_t max_symbols{16'384};
 };
 
 struct ThreadedEngineStats {
@@ -25,6 +30,7 @@ struct ThreadedEngineStats {
     std::uint64_t book_updates{};
     std::uint64_t recorded_events{};
     std::uint64_t metrics_events{};
+    std::uint64_t pcap_packets{};
     std::uint64_t parse_errors{};
     std::uint64_t duplicate_messages{};
     std::uint64_t recovery_requests{};

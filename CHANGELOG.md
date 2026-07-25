@@ -10,6 +10,8 @@
 - Release-triggered evidence artifact workflow
 - Threaded capture engine with fixed ingress slots and independent SPSC book,
   recorder, and metrics workers
+- Heap-free steady-state path using fixed ITCH events, circular arbitration,
+  arena/pool-backed books, and asynchronous raw PCAP
 
 ## v1.1.0
 

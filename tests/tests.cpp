@@ -1,11 +1,13 @@
 #include "marketcapture/config.hpp"
 #include "marketcapture/book_router.hpp"
+#include "marketcapture/arena_book.hpp"
 #include "marketcapture/checkpoint.hpp"
 #include "marketcapture/exchange_simulator.hpp"
 #include "marketcapture/dpdk_source.hpp"
 #include "marketcapture/feed_arbitrator.hpp"
 #include "marketcapture/fpga_ring.hpp"
 #include "marketcapture/hardware_timestamp.hpp"
+#include "marketcapture/hot_event.hpp"
 #include "marketcapture/itch.hpp"
 #include "marketcapture/latency.hpp"
 #include "marketcapture/linux_batch_receiver.hpp"
@@ -407,10 +409,13 @@ void test_threaded_capture_engine() {
     using namespace marketcapture;
     const auto path = std::filesystem::temp_directory_path() /
                       "marketcapture_threaded_test.ticks";
+    const auto pcap_path = std::filesystem::temp_directory_path() /
+                           "marketcapture_threaded_test.pcap";
     ExchangeSimulator simulator(99, {"AAPL", "MSFT"});
     ThreadedEngineConfig config;
     config.book_shards = 4;
     config.record_path = path;
+    config.pcap_path = pcap_path;
     config.initial_sequence = 1;
     ThreadedCaptureEngine engine(config);
     constexpr std::size_t count = 200;
@@ -429,9 +434,34 @@ void test_threaded_capture_engine() {
     CHECK(stats.book_updates == count);
     CHECK(stats.recorded_events == count);
     CHECK(stats.metrics_events == count);
+    CHECK(stats.pcap_packets == count);
     CHECK(stats.active_symbols == 2);
     CHECK(ReplayEngine{}.replay(path, [](const Event&) {}) == count);
+    CHECK(PcapReplay{}.replay(pcap_path, [](std::uint64_t, auto) {}) == count);
     std::filesystem::remove(path);
+    std::filesystem::remove(pcap_path);
+}
+
+void test_fixed_hot_event_and_arena_book() {
+    using namespace marketcapture;
+    const auto bytes = add_message(1001);
+    const auto hot = HotItchParser{}.parse(bytes);
+    CHECK(hot.type == HotEventType::add);
+    CHECK(hot.order_id == 1001 && hot.shares == 100 && hot.price == 1892500);
+    const auto materialized = std::get<AddOrder>(materialize_event(hot));
+    CHECK(materialized.symbol == "AAPL");
+
+    ArenaBookRouter arena(1024 * 1024, 2, 2, 2);
+    arena.apply(hot);
+    CHECK(arena.order_count() == 1 && arena.symbol_count() == 1);
+    CHECK(arena.best_bid(hot.symbol)->shares == 100);
+    auto second = hot;
+    second.order_id = 1002;
+    arena.apply(second);
+    CHECK(arena.order_count() == 2);
+    auto third = hot;
+    third.order_id = 1003;
+    throws([&] { arena.apply(third); });
 }
 }
 
@@ -444,6 +474,7 @@ int main() {
     test_hardware_adapters();
     test_linux_batch_receiver();
     test_threaded_capture_engine();
+    test_fixed_hot_event_and_arena_book();
     if (failures) return 1;
     std::cout << "All MarketCapture tests passed\n";
 }

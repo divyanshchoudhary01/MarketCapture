@@ -1,6 +1,7 @@
 #include "marketcapture/threaded_engine.hpp"
-#include "marketcapture/book_router.hpp"
-#include "marketcapture/itch.hpp"
+#include "marketcapture/arena_book.hpp"
+#include "marketcapture/hot_event.hpp"
+#include "marketcapture/pcap.hpp"
 #include "marketcapture/recorder.hpp"
 #include "marketcapture/ring_buffer.hpp"
 #include <array>
@@ -23,13 +24,19 @@ struct PacketSlot {
     std::array<std::uint8_t, max_datagram_bytes> bytes{};
     std::uint32_t size{};
     FeedChannel channel{};
+    std::uint64_t timestamp_ns{};
 };
 struct EventEnvelope {
     std::uint64_t sequence{};
-    Event event;
+    HotEvent event;
 };
 struct MetricEvent {
     std::uint64_t sequence{};
+};
+struct PcapEnvelope {
+    std::array<std::uint8_t, max_datagram_bytes> bytes{};
+    std::uint32_t size{};
+    std::uint64_t timestamp_ns{};
 };
 
 template <typename Queue, typename Value>
@@ -47,7 +54,9 @@ bool push_wait(Queue& queue, Value value, const std::atomic<bool>& abort) {
 class ThreadedCaptureEngine::Impl {
 public:
     Impl(ThreadedEngineConfig input, RecoveryHandler recovery)
-        : config(std::move(input)), books(config.book_shards) {
+        : config(std::move(input)),
+          books(config.book_arena_bytes, config.max_orders, config.max_levels,
+                config.max_symbols) {
         if (config.book_shards == 0)
             throw std::invalid_argument("threaded engine needs at least one book shard");
         for (std::size_t index = 0; index < packet_slots - 1; ++index)
@@ -55,13 +64,15 @@ public:
                 throw std::logic_error("cannot initialize packet pool");
         if (!config.record_path.empty())
             recorder.emplace(config.record_path);
+        if (!config.pcap_path.empty())
+            pcap.emplace(config.pcap_path);
 
         arbitrator = std::make_unique<FeedArbitrator>(
             [this](const ArbitratedMessage& message) {
-                auto event = parser.parse(message.payload);
+                auto event = parser.parse(message.payload());
                 EventEnvelope envelope{message.sequence, std::move(event)};
                 if (!push_wait(book_queue, envelope, abort_workers)) return;
-                if (is_order_tick(envelope.event) &&
+                if (envelope.event.order_tick() &&
                     !push_wait(record_queue, envelope, abort_workers)) return;
                 if (!push_wait(metrics_queue, MetricEvent{message.sequence}, abort_workers))
                     return;
@@ -78,6 +89,7 @@ public:
         book_thread = std::thread([this] { guard([this] { book_loop(); }); });
         recorder_thread = std::thread([this] { guard([this] { recorder_loop(); }); });
         metrics_thread = std::thread([this] { guard([this] { metrics_loop(); }); });
+        pcap_thread = std::thread([this] { guard([this] { pcap_loop(); }); });
         parser_thread = std::thread([this] { guard([this] { parser_loop(); }); });
     }
 
@@ -104,6 +116,13 @@ public:
             if (!index) { std::this_thread::yield(); continue; }
             auto& slot = packets[*index];
             try {
+                if (pcap) {
+                    PcapEnvelope raw;
+                    raw.size = slot.size;
+                    raw.timestamp_ns = slot.timestamp_ns;
+                    std::memcpy(raw.bytes.data(), slot.bytes.data(), slot.size);
+                    if (!push_wait(pcap_queue, raw, abort_workers)) break;
+                }
                 arbitrator->ingest(slot.channel,
                     std::span<const std::uint8_t>(slot.bytes.data(), slot.size));
             } catch (...) {
@@ -131,7 +150,7 @@ public:
         while (!parser_done.load(std::memory_order_acquire) || !record_queue.empty()) {
             auto item = record_queue.try_pop();
             if (!item) { std::this_thread::yield(); continue; }
-            if (recorder) recorder->write(item->event);
+            if (recorder) recorder->write(materialize_event(item->event));
             recorded_events.fetch_add(1, std::memory_order_relaxed);
         }
         if (recorder) recorder->flush();
@@ -146,6 +165,18 @@ public:
         }
     }
 
+    void pcap_loop() {
+        while (!parser_done.load(std::memory_order_acquire) || !pcap_queue.empty()) {
+            auto item = pcap_queue.try_pop();
+            if (!item) { std::this_thread::yield(); continue; }
+            if (pcap) pcap->write(
+                std::span<const std::uint8_t>(item->bytes.data(), item->size),
+                item->timestamp_ns);
+            pcap_packets.fetch_add(1, std::memory_order_relaxed);
+        }
+        if (pcap) pcap->flush();
+    }
+
     void stop() {
         if (stopped.exchange(true)) return;
         accepting.store(false, std::memory_order_release);
@@ -153,7 +184,9 @@ public:
         if (book_thread.joinable()) book_thread.join();
         if (recorder_thread.joinable()) recorder_thread.join();
         if (metrics_thread.joinable()) metrics_thread.join();
+        if (pcap_thread.joinable()) pcap_thread.join();
         recorder.reset();
+        pcap.reset();
     }
 
     ThreadedEngineConfig config;
@@ -163,15 +196,18 @@ public:
     SpscRingBuffer<EventEnvelope, event_slots> book_queue;
     SpscRingBuffer<EventEnvelope, event_slots> record_queue;
     SpscRingBuffer<MetricEvent, event_slots> metrics_queue;
-    ItchParser parser;
-    ShardedBookRouter books;
+    SpscRingBuffer<PcapEnvelope, packet_slots> pcap_queue;
+    HotItchParser parser;
+    ArenaBookRouter books;
     std::optional<TickRecorder> recorder;
+    std::optional<PcapWriter> pcap;
     std::unique_ptr<FeedArbitrator> arbitrator;
-    std::thread parser_thread, book_thread, recorder_thread, metrics_thread;
+    std::thread parser_thread, book_thread, recorder_thread, metrics_thread, pcap_thread;
     std::atomic<bool> accepting{true}, parser_done{false}, abort_workers{false}, stopped{false};
     std::atomic<std::uint64_t> packets_submitted{}, packets_rejected{}, packets_consumed{};
     std::atomic<std::uint64_t> messages_parsed{}, book_updates{}, recorded_events{};
     std::atomic<std::uint64_t> metrics_events{}, parse_errors{}, gaps_unrecovered{};
+    std::atomic<std::uint64_t> pcap_packets{};
     std::atomic<std::uint64_t> last_sequence{};
     std::atomic<std::size_t> active_symbols{}, active_orders{};
     mutable std::mutex error_mutex;
@@ -199,6 +235,10 @@ bool ThreadedCaptureEngine::submit(FeedChannel channel,
     std::memcpy(slot.bytes.data(), datagram.data(), datagram.size());
     slot.size = static_cast<std::uint32_t>(datagram.size());
     slot.channel = channel;
+    if (impl_->pcap)
+        slot.timestamp_ns = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
     if (!impl_->ingress.try_push(*index)) {
         while (!impl_->free_slots.try_push(*index)) std::this_thread::yield();
         impl_->packets_rejected.fetch_add(1, std::memory_order_relaxed);
@@ -215,6 +255,8 @@ bool ThreadedCaptureEngine::wait_until_idle(std::chrono::milliseconds timeout) {
                 impl_->packets_submitted.load(std::memory_order_acquire) &&
             impl_->ingress.empty() && impl_->book_queue.empty() &&
             impl_->record_queue.empty() && impl_->metrics_queue.empty())
+            // The PCAP consumer participates in the same drain contract.
+            if (impl_->pcap_queue.empty())
             return true;
         std::this_thread::yield();
     }
@@ -234,6 +276,7 @@ ThreadedEngineStats ThreadedCaptureEngine::stats() const noexcept {
     result.book_updates = impl_->book_updates.load();
     result.recorded_events = impl_->recorded_events.load();
     result.metrics_events = impl_->metrics_events.load();
+    result.pcap_packets = impl_->pcap_packets.load();
     result.parse_errors = impl_->parse_errors.load();
     result.duplicate_messages = impl_->arbitrator->duplicates();
     result.recovery_requests = impl_->arbitrator->recovery_requests();

@@ -26,7 +26,10 @@ RotatingMappedStore::RotatingMappedStore(std::filesystem::path directory,
     std::filesystem::create_directories(directory_);
     for (const auto& path : segments()) {
         const auto name = path.stem().string();
-        try { next_id_ = std::max(next_id_, std::stoull(name.substr(8)) + 1); }
+        try {
+            const auto parsed = static_cast<std::uint64_t>(std::stoull(name.substr(8)));
+            next_id_ = std::max(next_id_, parsed + std::uint64_t{1});
+        }
         catch (...) { /* Ignore unrelated names matching the broad pattern. */ }
     }
     open_next_segment();

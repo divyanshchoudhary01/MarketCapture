@@ -1,6 +1,5 @@
 #include "marketcapture/config.hpp"
 #include "marketcapture/live_feed.hpp"
-#include "marketcapture/pcap.hpp"
 #include "marketcapture/threaded_engine.hpp"
 #include "marketcapture/types.hpp"
 #include <atomic>
@@ -25,14 +24,11 @@ int main(int argc, char** argv) {
 
     try {
         const auto config = marketcapture::LiveFeedConfig::load(argv[1]);
-        std::unique_ptr<marketcapture::PcapWriter> pcap;
-        if (!config.pcap_path.empty())
-            pcap = std::make_unique<marketcapture::PcapWriter>(config.pcap_path);
-
         std::atomic<std::uint64_t> packets{0};
         std::atomic<std::uint64_t> rejected_packets{0};
         marketcapture::ThreadedEngineConfig engine_config;
         engine_config.record_path = config.record_path;
+        engine_config.pcap_path = config.pcap_path;
         marketcapture::ThreadedCaptureEngine engine(engine_config);
         marketcapture::UdpLiveFeed feed(config.multicast_group, config.port,
             config.interface_address, config.receive_buffer_bytes);
@@ -46,11 +42,6 @@ int main(int argc, char** argv) {
             try {
                 feed.run([&](std::span<const std::uint8_t> datagram) {
                     const auto packet_number = packets.fetch_add(1) + 1;
-                    if (pcap) {
-                        const auto now = std::chrono::system_clock::now().time_since_epoch();
-                        pcap->write(datagram, static_cast<std::uint64_t>(
-                            std::chrono::duration_cast<std::chrono::nanoseconds>(now).count()));
-                    }
                     if (!engine.submit(marketcapture::FeedChannel::a, datagram)) {
                         rejected_packets.fetch_add(1);
                         engine.rethrow_worker_error();
@@ -70,8 +61,6 @@ int main(int argc, char** argv) {
         if (!engine.wait_until_idle(std::chrono::seconds(30)))
             throw std::runtime_error("threaded capture pipeline did not drain");
         engine.stop();
-        if (pcap) pcap->flush();
-
         const auto metrics = engine.stats();
         std::cout << "packets=" << packets.load()
                   << " messages=" << metrics.messages_parsed
@@ -79,6 +68,7 @@ int main(int argc, char** argv) {
                   << " parse_errors=" << metrics.parse_errors
                   << " active_symbols=" << metrics.active_symbols
                   << " active_orders=" << metrics.active_orders
+                  << " pcap_packets=" << metrics.pcap_packets
                   << " rejected_packets=" << rejected_packets.load() << '\n';
         return rejected_packets.load() == 0 ? 0 : 3;
     } catch (const std::exception& error) {
