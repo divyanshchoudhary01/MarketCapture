@@ -112,6 +112,9 @@ acceptance criteria.
 
 Design and evidence:
 
+- [System flow PDF](output/pdf/MarketCapture_System_Flow.pdf)
+- [Detailed engineering design PDF](output/pdf/MarketCapture_Engineering_Design.pdf)
+- [Interview preparation handbook PDF](output/pdf/MarketCapture_Interview_Handbook.pdf)
 - [Hiring-grade architecture](docs/architecture/hiring_grade_architecture.md)
 - [A/B arbitration](docs/design/FeedArbitration.md)
 - [Checkpoint recovery](docs/design/CheckpointRecovery.md)
