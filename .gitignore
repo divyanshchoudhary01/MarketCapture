@@ -28,6 +28,11 @@ build.ninja
 # Executables
 *.exe
 *.out
+data/
+evidence/
+*.itch
+*.pcap
+*.ticks
 
 # Coverage
 *.gcda

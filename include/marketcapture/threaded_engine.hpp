@@ -11,6 +11,8 @@
 
 namespace marketcapture {
 
+enum class OverloadPolicy { reject, spin };
+
 struct ThreadedEngineConfig {
     std::size_t book_shards{8};
     std::filesystem::path record_path;
@@ -21,6 +23,8 @@ struct ThreadedEngineConfig {
     std::size_t max_orders{1'000'000};
     std::size_t max_levels{500'000};
     std::size_t max_symbols{16'384};
+    OverloadPolicy overload_policy{OverloadPolicy::reject};
+    int parser_cpu{-1}, book_cpu{-1}, recorder_cpu{-1}, metrics_cpu{-1}, pcap_cpu{-1};
 };
 
 struct ThreadedEngineStats {
@@ -36,6 +40,11 @@ struct ThreadedEngineStats {
     std::uint64_t recovery_requests{};
     std::size_t active_symbols{};
     std::size_t active_orders{};
+    std::size_t ingress_high_watermark{};
+    std::size_t book_high_watermark{};
+    std::size_t recorder_high_watermark{};
+    std::size_t metrics_high_watermark{};
+    std::size_t pcap_high_watermark{};
 };
 
 // One submitter (NIC/RX thread) feeds a preallocated packet pool. Arbitration

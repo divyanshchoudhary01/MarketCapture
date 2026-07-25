@@ -46,4 +46,24 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+class IoUringMultishotReceiver {
+public:
+    using Handler = std::function<void(std::span<const std::uint8_t>)>;
+    IoUringMultishotReceiver(int socket_fd, std::size_t buffer_count = 256,
+                             std::size_t datagram_size = 65536);
+    ~IoUringMultishotReceiver();
+    [[nodiscard]] std::size_t receive_batch(const Handler& handler,
+                                            std::size_t max_completions = 64);
+    [[nodiscard]] static constexpr bool compiled() noexcept {
+#ifdef MARKETCAPTURE_HAS_IO_URING
+        return true;
+#else
+        return false;
+#endif
+    }
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 } // namespace marketcapture

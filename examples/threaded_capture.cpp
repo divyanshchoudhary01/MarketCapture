@@ -36,6 +36,9 @@ int main(int argc, char** argv) {
                   << " recorded=" << stats.recorded_events
                   << " symbols=" << stats.active_symbols
                   << " orders=" << stats.active_orders
+                  << " ingress_hwm=" << stats.ingress_high_watermark
+                  << " book_hwm=" << stats.book_high_watermark
+                  << " recorder_hwm=" << stats.recorder_high_watermark
                   << " packets_per_second="
                   << static_cast<std::uint64_t>(stats.packets_submitted / elapsed)
                   << '\n';

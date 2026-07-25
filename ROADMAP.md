@@ -88,3 +88,9 @@ Every original milestone is complete and covered by the build or test suite.
 - [ ] Publish bare-metal Linux flamegraph and pinned-core benchmark results
 - [ ] Record and link the polished three-minute demonstration
 - [ ] Tag the next release after evidence artifacts are reviewed
+- [x] Official BinaryFile streaming integration and independent golden decoder
+- [x] Multishot io_uring provided-buffer receiver
+- [x] DPDK runtime harness with NIC/engine telemetry
+- [x] Thread affinity, overload policy, and queue high-watermarks
+- [x] Forced-termination soak, bare-metal, flamegraph, and release workflows
+- [ ] Publish results produced on physical bare-metal/NIC infrastructure

@@ -136,4 +136,106 @@ std::size_t IoUringUdpReceiver::receive_batch(const Handler& handler) {
 #endif
 }
 
+class IoUringMultishotReceiver::Impl {
+public:
+    Impl(int descriptor, std::size_t count, std::size_t size)
+        : socket_fd(descriptor), buffer_count(count), buffer_size(size),
+          storage(count * size) {
+#ifdef MARKETCAPTURE_HAS_IO_URING
+        if (descriptor < 0 || count == 0 || count > 65535 || size == 0)
+            throw std::invalid_argument("invalid multishot receiver configuration");
+        if (io_uring_queue_init(static_cast<unsigned>(count + 8), &ring, 0) < 0)
+            throw std::runtime_error("multishot io_uring initialization failed");
+        initialized = true;
+        auto* provide = io_uring_get_sqe(&ring);
+        io_uring_prep_provide_buffers(provide, storage.data(),
+            static_cast<int>(buffer_size), static_cast<int>(buffer_count),
+            group_id, 0);
+        if (io_uring_submit_and_wait(&ring, 1) < 0)
+            throw std::runtime_error("provided-buffer registration failed");
+        io_uring_cqe* completion{};
+        if (io_uring_peek_cqe(&ring, &completion) != 0 || completion->res < 0)
+            throw std::runtime_error("provided-buffer registration completion failed");
+        io_uring_cqe_seen(&ring, completion);
+        arm();
+#else
+        throw std::runtime_error("MarketCapture was built without io_uring");
+#endif
+    }
+    ~Impl() {
+#ifdef MARKETCAPTURE_HAS_IO_URING
+        if (initialized) io_uring_queue_exit(&ring);
+#endif
+    }
+#ifdef MARKETCAPTURE_HAS_IO_URING
+    void arm() {
+        auto* entry = io_uring_get_sqe(&ring);
+        if (!entry) throw std::runtime_error("multishot submission queue is full");
+        io_uring_prep_recv_multishot(entry, socket_fd, nullptr, 0, 0);
+        entry->flags |= IOSQE_BUFFER_SELECT;
+        entry->buf_group = group_id;
+        io_uring_sqe_set_data64(entry, receive_tag);
+        if (io_uring_submit(&ring) < 0)
+            throw std::runtime_error("multishot receive submit failed");
+    }
+    void recycle(unsigned id) {
+        auto* entry = io_uring_get_sqe(&ring);
+        if (!entry) throw std::runtime_error("buffer recycle queue is full");
+        io_uring_prep_provide_buffers(entry, storage.data() + id * buffer_size,
+            static_cast<int>(buffer_size), 1, group_id, static_cast<int>(id));
+        io_uring_sqe_set_data64(entry, recycle_tag);
+    }
+    static constexpr std::uint64_t receive_tag = 1;
+    static constexpr std::uint64_t recycle_tag = 2;
+    static constexpr int group_id = 7;
+    io_uring ring{};
+    bool initialized{};
+#endif
+    int socket_fd;
+    std::size_t buffer_count, buffer_size;
+    std::vector<std::uint8_t> storage;
+};
+
+IoUringMultishotReceiver::IoUringMultishotReceiver(
+    int socket_fd, std::size_t buffer_count, std::size_t datagram_size)
+    : impl_(std::make_unique<Impl>(socket_fd, buffer_count, datagram_size)) {}
+IoUringMultishotReceiver::~IoUringMultishotReceiver() = default;
+
+std::size_t IoUringMultishotReceiver::receive_batch(
+    const Handler& handler, std::size_t max_completions) {
+#ifdef MARKETCAPTURE_HAS_IO_URING
+    io_uring_cqe* first{};
+    if (io_uring_wait_cqe(&impl_->ring, &first) < 0)
+        throw std::runtime_error("multishot wait failed");
+    std::vector<io_uring_cqe*> completions(max_completions);
+    const auto count = io_uring_peek_batch_cqe(
+        &impl_->ring, completions.data(), static_cast<unsigned>(completions.size()));
+    std::size_t delivered = 0;
+    bool needs_rearm = false;
+    for (unsigned index = 0; index < count; ++index) {
+        auto* completion = completions[index];
+        if (io_uring_cqe_get_data64(completion) == Impl::recycle_tag) continue;
+        if (completion->res < 0)
+            throw std::runtime_error("multishot receive completion failed");
+        if (!(completion->flags & IORING_CQE_F_BUFFER))
+            throw std::runtime_error("multishot completion has no selected buffer");
+        const auto buffer_id = completion->flags >> IORING_CQE_BUFFER_SHIFT;
+        handler(std::span<const std::uint8_t>(
+            impl_->storage.data() + buffer_id * impl_->buffer_size,
+            static_cast<std::size_t>(completion->res)));
+        impl_->recycle(buffer_id);
+        ++delivered;
+        if (!(completion->flags & IORING_CQE_F_MORE)) needs_rearm = true;
+    }
+    io_uring_cq_advance(&impl_->ring, count);
+    if (needs_rearm) impl_->arm();
+    if (io_uring_submit(&impl_->ring) < 0)
+        throw std::runtime_error("multishot buffer recycle submit failed");
+    return delivered;
+#else
+    (void)handler; (void)max_completions;
+    throw std::runtime_error("MarketCapture was built without io_uring");
+#endif
+}
+
 } // namespace marketcapture

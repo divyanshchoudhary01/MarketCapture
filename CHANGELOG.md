@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.0
 
 ### Added
 
@@ -12,6 +12,10 @@
   recorder, and metrics workers
 - Heap-free steady-state path using fixed ITCH events, circular arbitration,
   arena/pool-backed books, and asynchronous raw PCAP
+- Official BinaryFile validator and independent Python golden decoder
+- Multishot io_uring provided-buffer receiver and executable DPDK runtime
+- CPU affinity, overload policy, queue watermarks, soak/crash and bare-metal tooling
+- Tagged-release packaging, demo-recording workflow, and interview guide
 
 ## v1.1.0
 

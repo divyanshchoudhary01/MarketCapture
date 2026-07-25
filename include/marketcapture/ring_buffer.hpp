@@ -38,6 +38,11 @@ public:
     }
 
     [[nodiscard]] constexpr std::size_t capacity() const noexcept { return Capacity - 1; }
+    [[nodiscard]] std::size_t size() const noexcept {
+        const auto head = head_.load(std::memory_order_acquire);
+        const auto tail = tail_.load(std::memory_order_acquire);
+        return (head - tail) & (Capacity - 1);
+    }
 
 private:
     static constexpr std::size_t increment(std::size_t value) noexcept {

@@ -26,7 +26,11 @@ extract_ethernet_ipv4_udp_payload(std::span<const std::uint8_t> frame) noexcept 
 class DpdkPacketSource::Impl {
 public:
     Impl(std::uint16_t port, std::uint16_t queue, std::uint16_t burst)
-        : port_id(port), queue_id(queue), burst_size(burst) {
+        : port_id(port), queue_id(queue), burst_size(burst)
+#ifdef MARKETCAPTURE_HAS_DPDK
+        , packets(burst)
+#endif
+        {
         if (burst == 0) throw std::invalid_argument("DPDK burst size must be positive");
 #ifndef MARKETCAPTURE_HAS_DPDK
         throw std::runtime_error("MarketCapture was built without DPDK");
@@ -35,6 +39,9 @@ public:
     std::uint16_t port_id;
     std::uint16_t queue_id;
     std::uint16_t burst_size;
+#ifdef MARKETCAPTURE_HAS_DPDK
+    std::vector<rte_mbuf*> packets;
+#endif
 };
 
 DpdkPacketSource::DpdkPacketSource(std::uint16_t port_id, std::uint16_t queue_id,
@@ -44,12 +51,11 @@ DpdkPacketSource::~DpdkPacketSource() = default;
 
 std::size_t DpdkPacketSource::poll(const Handler& handler) {
 #ifdef MARKETCAPTURE_HAS_DPDK
-    std::vector<rte_mbuf*> packets(impl_->burst_size);
     const auto received = rte_eth_rx_burst(
-        impl_->port_id, impl_->queue_id, packets.data(), impl_->burst_size);
+        impl_->port_id, impl_->queue_id, impl_->packets.data(), impl_->burst_size);
     std::size_t delivered = 0;
     for (std::uint16_t index = 0; index < received; ++index) {
-        auto* packet = packets[index];
+        auto* packet = impl_->packets[index];
         const auto* bytes = rte_pktmbuf_mtod(packet, const std::uint8_t*);
         const auto length = rte_pktmbuf_pkt_len(packet);
         if (rte_pktmbuf_is_contiguous(packet)) {

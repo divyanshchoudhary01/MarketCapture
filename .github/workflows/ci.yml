@@ -53,6 +53,12 @@ jobs:
         run: |
           ./build/marketcapture_threaded 100000 build/threaded.ticks
 
+      - name: Forced-Termination Soak Smoke
+        env:
+          BUILD_DIR: build
+          ITERATIONS: 3
+        run: ./scripts/soak_and_crash.sh build/soak
+
   sanitizers:
     runs-on: ubuntu-latest
     steps:

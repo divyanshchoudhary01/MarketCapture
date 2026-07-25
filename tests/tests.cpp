@@ -436,6 +436,8 @@ void test_threaded_capture_engine() {
     CHECK(stats.metrics_events == count);
     CHECK(stats.pcap_packets == count);
     CHECK(stats.active_symbols == 2);
+    CHECK(stats.ingress_high_watermark > 0);
+    CHECK(stats.book_high_watermark > 0);
     CHECK(ReplayEngine{}.replay(path, [](const Event&) {}) == count);
     CHECK(PcapReplay{}.replay(pcap_path, [](std::uint64_t, auto) {}) == count);
     std::filesystem::remove(path);

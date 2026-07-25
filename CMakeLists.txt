@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(MarketCapture VERSION 1.1.0 LANGUAGES CXX)
+project(MarketCapture VERSION 2.0.0 LANGUAGES CXX)
 
 option(MARKETCAPTURE_BUILD_TESTS "Build unit tests" ON)
 option(MARKETCAPTURE_BUILD_EXAMPLES "Build examples" ON)
@@ -12,6 +12,7 @@ option(MARKETCAPTURE_ENABLE_IO_URING "Build the Linux io_uring receiver" OFF)
 
 add_library(marketcapture
     src/arena_book.cpp
+    src/binary_file.cpp
     src/book_router.cpp
     src/checkpoint.cpp
     src/itch.cpp
@@ -45,6 +46,8 @@ if(MARKETCAPTURE_ENABLE_DPDK)
     pkg_check_modules(DPDK REQUIRED IMPORTED_TARGET libdpdk)
     target_link_libraries(marketcapture PRIVATE PkgConfig::DPDK)
     target_compile_definitions(marketcapture PUBLIC MARKETCAPTURE_HAS_DPDK=1)
+    add_executable(marketcapture_dpdk examples/dpdk_capture.cpp)
+    target_link_libraries(marketcapture_dpdk PRIVATE MarketCapture::marketcapture PkgConfig::DPDK)
 endif()
 if(MARKETCAPTURE_ENABLE_IO_URING)
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -85,6 +88,9 @@ if(MARKETCAPTURE_BUILD_EXAMPLES)
 
     add_executable(marketcapture_threaded examples/threaded_capture.cpp)
     target_link_libraries(marketcapture_threaded PRIVATE MarketCapture::marketcapture)
+
+    add_executable(marketcapture_validate_itch examples/official_itch_validate.cpp)
+    target_link_libraries(marketcapture_validate_itch PRIVATE MarketCapture::marketcapture)
 endif()
 
 if(MARKETCAPTURE_BUILD_FUZZERS)
@@ -112,10 +118,21 @@ if(MARKETCAPTURE_BUILD_TESTS)
     add_executable(marketcapture_tests tests/tests.cpp)
     target_link_libraries(marketcapture_tests PRIVATE MarketCapture::marketcapture)
     add_test(NAME marketcapture_tests COMMAND marketcapture_tests)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND TARGET marketcapture_validate_itch)
+        add_test(NAME itch_golden_differential
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/reference_itch_decoder.py
+                    $<TARGET_FILE:marketcapture_validate_itch>)
+    endif()
     if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         get_filename_component(MINGW_RUNTIME_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
         set_tests_properties(marketcapture_tests PROPERTIES
             ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${MINGW_RUNTIME_DIR}")
+        if(TEST itch_golden_differential)
+            set_tests_properties(itch_golden_differential PROPERTIES
+                ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${MINGW_RUNTIME_DIR}")
+        endif()
     endif()
 endif()
 
@@ -130,6 +147,12 @@ if(TARGET marketcapture_showcase)
 endif()
 if(TARGET marketcapture_threaded)
     install(TARGETS marketcapture_threaded RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(TARGET marketcapture_validate_itch)
+    install(TARGETS marketcapture_validate_itch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(TARGET marketcapture_dpdk)
+    install(TARGETS marketcapture_dpdk RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES config/feed.conf.example DESTINATION ${CMAKE_INSTALL_DATADIR}/marketcapture)

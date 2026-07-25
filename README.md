@@ -27,6 +27,9 @@ engineering for HFT-oriented systems roles.
 - Preallocated ingress pool with parser-to-book/recorder/metrics SPSC fan-out
 - Fixed-width hot events, bounded circular arbitration, PMR arena books, and
   asynchronous PCAP persistence
+- Official BinaryFile streaming validator with independent golden decoder
+- Multishot io_uring provided buffers, CPU affinity, overload/watermark telemetry
+- Runnable DPDK EAL/port harness and crash/soak evidence workflows
 
 ## Roadmap status
 
@@ -121,6 +124,10 @@ Design and evidence:
 - [Reproducible evidence workflow](docs/benchmarks/EVIDENCE.md)
 - [Demo and resume narrative](docs/DEMO_AND_RESUME.md)
 - [Threaded hot-path ownership and backpressure](docs/design/ThreadedHotPath.md)
+- [Linux/DPDK runtime](docs/design/LinuxRuntime.md)
+- [Official ITCH correctness report](docs/benchmarks/OFFICIAL_ITCH_REPORT.md)
+- [Optimization report](docs/benchmarks/OPTIMIZATION_REPORT.md)
+- [Interview guide](docs/INTERVIEW_GUIDE.md)
 
 On multi-config Windows generators the executable is under `build/Release`.
 

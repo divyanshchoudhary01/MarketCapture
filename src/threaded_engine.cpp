@@ -13,6 +13,12 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
+#endif
 
 namespace marketcapture {
 namespace {
@@ -40,14 +46,34 @@ struct PcapEnvelope {
 };
 
 template <typename Queue, typename Value>
-bool push_wait(Queue& queue, Value value, const std::atomic<bool>& abort) {
+bool push_wait(Queue& queue, Value value, const std::atomic<bool>& abort,
+               std::atomic<std::size_t>& watermark) {
     // SpscRingBuffer accepts by value, so moving here would consume the event
     // even when a full queue rejects it. Preserve the source across retries.
     while (!queue.try_push(value)) {
         if (abort.load(std::memory_order_acquire)) return false;
         std::this_thread::yield();
     }
+    auto observed = queue.size();
+    auto current = watermark.load(std::memory_order_relaxed);
+    while (observed > current &&
+           !watermark.compare_exchange_weak(current, observed,
+                                             std::memory_order_relaxed)) {}
     return true;
+}
+void pin_thread(int cpu) {
+    if (cpu < 0) return;
+#ifdef _WIN32
+    if (cpu >= 64 || !SetThreadAffinityMask(GetCurrentThread(), 1ull << cpu))
+        throw std::runtime_error("thread affinity failed");
+#elif defined(__linux__)
+    cpu_set_t set;
+    CPU_ZERO(&set); CPU_SET(cpu, &set);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(set), &set) != 0)
+        throw std::runtime_error("thread affinity failed");
+#else
+    throw std::runtime_error("thread affinity unsupported");
+#endif
 }
 }
 
@@ -71,10 +97,11 @@ public:
             [this](const ArbitratedMessage& message) {
                 auto event = parser.parse(message.payload());
                 EventEnvelope envelope{message.sequence, std::move(event)};
-                if (!push_wait(book_queue, envelope, abort_workers)) return;
+                if (!push_wait(book_queue, envelope, abort_workers, book_watermark)) return;
                 if (envelope.event.order_tick() &&
-                    !push_wait(record_queue, envelope, abort_workers)) return;
-                if (!push_wait(metrics_queue, MetricEvent{message.sequence}, abort_workers))
+                    !push_wait(record_queue, envelope, abort_workers, recorder_watermark)) return;
+                if (!push_wait(metrics_queue, MetricEvent{message.sequence}, abort_workers,
+                               metrics_watermark))
                     return;
                 messages_parsed.fetch_add(1, std::memory_order_relaxed);
             },
@@ -110,6 +137,7 @@ public:
     }
 
     void parser_loop() {
+        pin_thread(config.parser_cpu);
         while (!abort_workers.load(std::memory_order_acquire) &&
                (accepting.load(std::memory_order_acquire) || !ingress.empty())) {
             auto index = ingress.try_pop();
@@ -121,7 +149,7 @@ public:
                     raw.size = slot.size;
                     raw.timestamp_ns = slot.timestamp_ns;
                     std::memcpy(raw.bytes.data(), slot.bytes.data(), slot.size);
-                    if (!push_wait(pcap_queue, raw, abort_workers)) break;
+                    if (!push_wait(pcap_queue, raw, abort_workers, pcap_watermark)) break;
                 }
                 arbitrator->ingest(slot.channel,
                     std::span<const std::uint8_t>(slot.bytes.data(), slot.size));
@@ -136,6 +164,7 @@ public:
     }
 
     void book_loop() {
+        pin_thread(config.book_cpu);
         while (!parser_done.load(std::memory_order_acquire) || !book_queue.empty()) {
             auto item = book_queue.try_pop();
             if (!item) { std::this_thread::yield(); continue; }
@@ -147,6 +176,7 @@ public:
     }
 
     void recorder_loop() {
+        pin_thread(config.recorder_cpu);
         while (!parser_done.load(std::memory_order_acquire) || !record_queue.empty()) {
             auto item = record_queue.try_pop();
             if (!item) { std::this_thread::yield(); continue; }
@@ -157,6 +187,7 @@ public:
     }
 
     void metrics_loop() {
+        pin_thread(config.metrics_cpu);
         while (!parser_done.load(std::memory_order_acquire) || !metrics_queue.empty()) {
             auto item = metrics_queue.try_pop();
             if (!item) { std::this_thread::yield(); continue; }
@@ -166,6 +197,7 @@ public:
     }
 
     void pcap_loop() {
+        pin_thread(config.pcap_cpu);
         while (!parser_done.load(std::memory_order_acquire) || !pcap_queue.empty()) {
             auto item = pcap_queue.try_pop();
             if (!item) { std::this_thread::yield(); continue; }
@@ -210,6 +242,8 @@ public:
     std::atomic<std::uint64_t> pcap_packets{};
     std::atomic<std::uint64_t> last_sequence{};
     std::atomic<std::size_t> active_symbols{}, active_orders{};
+    std::atomic<std::size_t> ingress_watermark{}, book_watermark{}, recorder_watermark{};
+    std::atomic<std::size_t> metrics_watermark{}, pcap_watermark{};
     mutable std::mutex error_mutex;
     std::exception_ptr worker_error;
 };
@@ -227,6 +261,11 @@ bool ThreadedCaptureEngine::submit(FeedChannel channel,
         return false;
     }
     auto index = impl_->free_slots.try_pop();
+    while (!index && impl_->config.overload_policy == OverloadPolicy::spin &&
+           impl_->accepting.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+        index = impl_->free_slots.try_pop();
+    }
     if (!index) {
         impl_->packets_rejected.fetch_add(1, std::memory_order_relaxed);
         return false;
@@ -244,6 +283,11 @@ bool ThreadedCaptureEngine::submit(FeedChannel channel,
         impl_->packets_rejected.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
+    auto observed = impl_->ingress.size();
+    auto current = impl_->ingress_watermark.load(std::memory_order_relaxed);
+    while (observed > current &&
+           !impl_->ingress_watermark.compare_exchange_weak(
+               current, observed, std::memory_order_relaxed)) {}
     impl_->packets_submitted.fetch_add(1, std::memory_order_release);
     return true;
 }
@@ -282,6 +326,11 @@ ThreadedEngineStats ThreadedCaptureEngine::stats() const noexcept {
     result.recovery_requests = impl_->arbitrator->recovery_requests();
     result.active_symbols = impl_->active_symbols.load();
     result.active_orders = impl_->active_orders.load();
+    result.ingress_high_watermark = impl_->ingress_watermark.load();
+    result.book_high_watermark = impl_->book_watermark.load();
+    result.recorder_high_watermark = impl_->recorder_watermark.load();
+    result.metrics_high_watermark = impl_->metrics_watermark.load();
+    result.pcap_high_watermark = impl_->pcap_watermark.load();
     return result;
 }
 
