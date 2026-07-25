@@ -8,6 +8,7 @@ cmake --build build-evidence
 ctest --test-dir build-evidence --output-on-failure | tee "$out/tests.txt"
 ./build-evidence/marketcapture_benchmark 10000000 | tee "$out/benchmark.txt"
 ./build-evidence/marketcapture_showcase 100000 "$out/showcase" | tee "$out/showcase.txt"
+./build-evidence/marketcapture_threaded 100000 "$out/threaded.ticks" | tee "$out/threaded.txt"
 if command -v perf >/dev/null 2>&1; then
   perf stat -d -r 5 -o "$out/perf-stat.txt" ./build-evidence/marketcapture_benchmark 10000000
   perf record -F 999 -g --call-graph dwarf -o "$out/perf.data" ./build-evidence/marketcapture_benchmark 10000000

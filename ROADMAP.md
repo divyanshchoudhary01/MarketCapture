@@ -82,6 +82,7 @@ Every original milestone is complete and covered by the build or test suite.
 - [x] End-to-end loss/recovery/restart showcase
 - [x] mmap/Zstd segment rotation with bounded count/byte retention
 - [x] Reproducible Linux benchmark, perf, flamegraph, and feed-acceptance scripts
+- [x] Preallocated RX packet pool and SPSC book/recorder/metrics fan-out
 - [ ] Publish a sanitized provider-entitled production capture report
 - [ ] Publish bare-metal Linux flamegraph and pinned-core benchmark results
 - [ ] Record and link the polished three-minute demonstration

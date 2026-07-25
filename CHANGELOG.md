@@ -8,6 +8,8 @@
 - Linux benchmark/perf evidence bundle and flamegraph rendering workflow
 - Licensed-feed acceptance evidence script and portfolio demo/resume narrative
 - Release-triggered evidence artifact workflow
+- Threaded capture engine with fixed ingress slots and independent SPSC book,
+  recorder, and metrics workers
 
 ## v1.1.0
 

@@ -26,6 +26,7 @@ add_library(marketcapture
     src/order_book.cpp
     src/recorder.cpp
     src/rotating_store.cpp
+    src/threaded_engine.cpp
     src/live_feed.cpp
     src/linux_batch_receiver.cpp
     src/mmap_store.cpp
@@ -79,6 +80,9 @@ if(MARKETCAPTURE_BUILD_EXAMPLES)
 
     add_executable(marketcapture_showcase examples/hiring_demo.cpp)
     target_link_libraries(marketcapture_showcase PRIVATE MarketCapture::marketcapture)
+
+    add_executable(marketcapture_threaded examples/threaded_capture.cpp)
+    target_link_libraries(marketcapture_threaded PRIVATE MarketCapture::marketcapture)
 endif()
 
 if(MARKETCAPTURE_BUILD_FUZZERS)
@@ -121,6 +125,9 @@ if(TARGET marketcapture_live)
 endif()
 if(TARGET marketcapture_showcase)
     install(TARGETS marketcapture_showcase RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(TARGET marketcapture_threaded)
+    install(TARGETS marketcapture_threaded RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES config/feed.conf.example DESTINATION ${CMAKE_INSTALL_DATADIR}/marketcapture)

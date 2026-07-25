@@ -24,6 +24,7 @@ engineering for HFT-oriented systems roles.
 - Versioned 128-byte FPGA DMA event ABI with acquire/release ownership
 - Checksummed mmap/Zstd segment rotation with bounded retention
 - Reproducible Linux evidence, profiling, feed-acceptance, and demo workflows
+- Preallocated ingress pool with parser-to-book/recorder/metrics SPSC fan-out
 
 ## Roadmap status
 
@@ -82,6 +83,12 @@ Run the complete portfolio demonstration:
 ./build/marketcapture_showcase 10000 demo-output
 ```
 
+Run the isolated threaded hot path:
+
+```sh
+./build/marketcapture_threaded 100000 threaded-output.ticks
+```
+
 The demo generates an A/B feed, independently drops packets on both channels,
 captures PCAP, requests recovery, replays missing data, builds six symbol books,
 writes a compressed mmap tick segment and checkpoint, restarts, and verifies
@@ -111,6 +118,7 @@ Design and evidence:
 - [Storage rotation and retention](docs/design/StorageRetention.md)
 - [Reproducible evidence workflow](docs/benchmarks/EVIDENCE.md)
 - [Demo and resume narrative](docs/DEMO_AND_RESUME.md)
+- [Threaded hot-path ownership and backpressure](docs/design/ThreadedHotPath.md)
 
 On multi-config Windows generators the executable is under `build/Release`.
 

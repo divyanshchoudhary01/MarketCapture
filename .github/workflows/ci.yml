@@ -49,6 +49,10 @@ jobs:
         run: |
           ./build/marketcapture_showcase 10000 build/showcase
 
+      - name: Run Threaded Hot Path
+        run: |
+          ./build/marketcapture_threaded 100000 build/threaded.ticks
+
   sanitizers:
     runs-on: ubuntu-latest
     steps:

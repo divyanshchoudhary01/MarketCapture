@@ -13,6 +13,7 @@
 #include "marketcapture/moldudp64.hpp"
 #include "marketcapture/mmap_store.hpp"
 #include "marketcapture/rotating_store.hpp"
+#include "marketcapture/threaded_engine.hpp"
 #include "marketcapture/order_book.hpp"
 #include "marketcapture/pipeline.hpp"
 #include "marketcapture/pcap.hpp"
@@ -26,6 +27,7 @@
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 #ifdef __linux__
 #include <sys/socket.h>
@@ -400,6 +402,37 @@ void test_linux_batch_receiver() {
     CHECK(!marketcapture::RecvmmsgReceiver::platform_supported());
 #endif
 }
+
+void test_threaded_capture_engine() {
+    using namespace marketcapture;
+    const auto path = std::filesystem::temp_directory_path() /
+                      "marketcapture_threaded_test.ticks";
+    ExchangeSimulator simulator(99, {"AAPL", "MSFT"});
+    ThreadedEngineConfig config;
+    config.book_shards = 4;
+    config.record_path = path;
+    config.initial_sequence = 1;
+    ThreadedCaptureEngine engine(config);
+    constexpr std::size_t count = 200;
+    for (std::size_t index = 0; index < count; ++index) {
+        auto packet = simulator.next();
+        while (!engine.submit(FeedChannel::a, packet.datagram)) {
+            engine.rethrow_worker_error();
+            std::this_thread::yield();
+        }
+    }
+    CHECK(engine.wait_until_idle(std::chrono::seconds(5)));
+    engine.stop();
+    const auto stats = engine.stats();
+    CHECK(stats.packets_submitted == count);
+    CHECK(stats.messages_parsed == count);
+    CHECK(stats.book_updates == count);
+    CHECK(stats.recorded_events == count);
+    CHECK(stats.metrics_events == count);
+    CHECK(stats.active_symbols == 2);
+    CHECK(ReplayEngine{}.replay(path, [](const Event&) {}) == count);
+    std::filesystem::remove(path);
+}
 }
 
 int main() {
@@ -410,6 +443,7 @@ int main() {
     test_rotating_store_retention();
     test_hardware_adapters();
     test_linux_batch_receiver();
+    test_threaded_capture_engine();
     if (failures) return 1;
     std::cout << "All MarketCapture tests passed\n";
 }

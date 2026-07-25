@@ -1,8 +1,7 @@
 #include "marketcapture/config.hpp"
 #include "marketcapture/live_feed.hpp"
-#include "marketcapture/pipeline.hpp"
 #include "marketcapture/pcap.hpp"
-#include "marketcapture/recorder.hpp"
+#include "marketcapture/threaded_engine.hpp"
 #include "marketcapture/types.hpp"
 #include <atomic>
 #include <chrono>
@@ -26,18 +25,15 @@ int main(int argc, char** argv) {
 
     try {
         const auto config = marketcapture::LiveFeedConfig::load(argv[1]);
-        std::unique_ptr<marketcapture::TickRecorder> recorder;
-        if (!config.record_path.empty())
-            recorder = std::make_unique<marketcapture::TickRecorder>(config.record_path);
         std::unique_ptr<marketcapture::PcapWriter> pcap;
         if (!config.pcap_path.empty())
             pcap = std::make_unique<marketcapture::PcapWriter>(config.pcap_path);
 
         std::atomic<std::uint64_t> packets{0};
         std::atomic<std::uint64_t> rejected_packets{0};
-        marketcapture::CapturePipeline pipeline([&](std::uint64_t, const marketcapture::Event& event) {
-            if (recorder && marketcapture::is_order_tick(event)) recorder->write(event);
-        });
+        marketcapture::ThreadedEngineConfig engine_config;
+        engine_config.record_path = config.record_path;
+        marketcapture::ThreadedCaptureEngine engine(engine_config);
         marketcapture::UdpLiveFeed feed(config.multicast_group, config.port,
             config.interface_address, config.receive_buffer_bytes);
 
@@ -55,11 +51,9 @@ int main(int argc, char** argv) {
                         pcap->write(datagram, static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(now).count()));
                     }
-                    try {
-                        (void)pipeline.process(datagram);
-                    } catch (const std::exception& error) {
+                    if (!engine.submit(marketcapture::FeedChannel::a, datagram)) {
                         rejected_packets.fetch_add(1);
-                        std::cerr << "Rejected packet " << packet_number << ": " << error.what() << '\n';
+                        engine.rethrow_worker_error();
                     }
                     if (config.max_packets != 0 && packet_number >= config.max_packets) feed.stop();
                 });
@@ -73,14 +67,18 @@ int main(int argc, char** argv) {
         feed.stop();
         receiver.join();
         if (receiver_error) std::rethrow_exception(receiver_error);
-        if (recorder) recorder->flush();
+        if (!engine.wait_until_idle(std::chrono::seconds(30)))
+            throw std::runtime_error("threaded capture pipeline did not drain");
+        engine.stop();
         if (pcap) pcap->flush();
 
-        const auto& metrics = pipeline.metrics();
+        const auto metrics = engine.stats();
         std::cout << "packets=" << packets.load()
-                  << " messages=" << metrics.messages()
-                  << " gaps=" << metrics.gaps()
-                  << " parse_errors=" << metrics.errors()
+                  << " messages=" << metrics.messages_parsed
+                  << " recovery_requests=" << metrics.recovery_requests
+                  << " parse_errors=" << metrics.parse_errors
+                  << " active_symbols=" << metrics.active_symbols
+                  << " active_orders=" << metrics.active_orders
                   << " rejected_packets=" << rejected_packets.load() << '\n';
         return rejected_packets.load() == 0 ? 0 : 3;
     } catch (const std::exception& error) {
