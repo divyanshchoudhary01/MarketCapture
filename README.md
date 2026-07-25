@@ -20,6 +20,7 @@ engineering for HFT-oriented systems roles.
 - mmap append-only block storage using the real Zstandard runtime
 - Linux `SO_TIMESTAMPING` receiver with hardware/software timestamp quality
 - Optional DPDK burst source that strips Ethernet/IPv4/UDP into MoldUDP64 payloads
+- Linux `recvmmsg` batching and optional fixed-buffer `io_uring` receive queues
 - Versioned 128-byte FPGA DMA event ABI with acquire/release ownership
 
 ## Roadmap status
@@ -150,6 +151,7 @@ order.
   transport remains provider-specific.
 - DPDK builds with `-DMARKETCAPTURE_ENABLE_DPDK=ON` and requires an initialized
   EAL port/queue. Physical NIC and FPGA claims require the target hardware.
+- io_uring builds with `-DMARKETCAPTURE_ENABLE_IO_URING=ON` and `liburing-dev`.
 
 ## License
 

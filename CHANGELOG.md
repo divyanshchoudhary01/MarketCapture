@@ -16,6 +16,8 @@
 - Linux NIC hardware timestamp receive adapter
 - Optional DPDK burst source with Ethernet/IPv4/UDP extraction
 - FPGA DMA record ABI, lock-free consumer, and simulator coverage
+- Linux recvmmsg batching and optional io_uring receive queues
+- Constant-time order-reference-to-book routing on the update hot path
 
 ## v1.0.0
 

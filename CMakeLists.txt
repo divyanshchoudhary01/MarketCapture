@@ -8,6 +8,7 @@ option(MARKETCAPTURE_BUILD_FUZZERS "Build libFuzzer targets (Clang only)" OFF)
 option(MARKETCAPTURE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(MARKETCAPTURE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(MARKETCAPTURE_ENABLE_DPDK "Build the DPDK burst packet source" OFF)
+option(MARKETCAPTURE_ENABLE_IO_URING "Build the Linux io_uring receiver" OFF)
 
 add_library(marketcapture
     src/book_router.cpp
@@ -25,6 +26,7 @@ add_library(marketcapture
     src/order_book.cpp
     src/recorder.cpp
     src/live_feed.cpp
+    src/linux_batch_receiver.cpp
     src/mmap_store.cpp
 )
 add_library(MarketCapture::marketcapture ALIAS marketcapture)
@@ -39,6 +41,15 @@ if(MARKETCAPTURE_ENABLE_DPDK)
     pkg_check_modules(DPDK REQUIRED IMPORTED_TARGET libdpdk)
     target_link_libraries(marketcapture PRIVATE PkgConfig::DPDK)
     target_compile_definitions(marketcapture PUBLIC MARKETCAPTURE_HAS_DPDK=1)
+endif()
+if(MARKETCAPTURE_ENABLE_IO_URING)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "io_uring is available only on Linux")
+    endif()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
+    target_link_libraries(marketcapture PRIVATE PkgConfig::LIBURING)
+    target_compile_definitions(marketcapture PUBLIC MARKETCAPTURE_HAS_IO_URING=1)
 endif()
 if(MSVC)
     target_compile_options(marketcapture PRIVATE /W4 /permissive-)

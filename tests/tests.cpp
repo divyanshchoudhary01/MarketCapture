@@ -8,6 +8,7 @@
 #include "marketcapture/hardware_timestamp.hpp"
 #include "marketcapture/itch.hpp"
 #include "marketcapture/latency.hpp"
+#include "marketcapture/linux_batch_receiver.hpp"
 #include "marketcapture/metrics.hpp"
 #include "marketcapture/moldudp64.hpp"
 #include "marketcapture/mmap_store.hpp"
@@ -25,6 +26,10 @@
 #include <fstream>
 #include <stdexcept>
 #include <vector>
+#ifdef __linux__
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 namespace {
 int failures = 0;
@@ -350,6 +355,28 @@ void test_hardware_adapters() {
     CHECK(!marketcapture::HardwareTimestampReceiver::platform_supported());
 #endif
 }
+
+void test_linux_batch_receiver() {
+#ifdef __linux__
+    int sockets[2]{};
+    CHECK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sockets) == 0);
+    const char first[] = "one";
+    const char second[] = "two";
+    CHECK(send(sockets[0], first, sizeof(first), 0) == sizeof(first));
+    CHECK(send(sockets[0], second, sizeof(second), 0) == sizeof(second));
+    marketcapture::RecvmmsgReceiver receiver(sockets[1], 4, 64);
+    std::vector<std::string> messages;
+    const auto received = receiver.receive_batch(
+        [&](std::span<const std::uint8_t> message) {
+            messages.emplace_back(reinterpret_cast<const char*>(message.data()),
+                                  message.size());
+        });
+    CHECK(received == 2 && messages.size() == 2);
+    close(sockets[0]); close(sockets[1]);
+#else
+    CHECK(!marketcapture::RecvmmsgReceiver::platform_supported());
+#endif
+}
 }
 
 int main() {
@@ -358,6 +385,7 @@ int main() {
     test_arbitration_and_pcap(); test_simulator_and_latency(); test_malformed_prefixes();
     test_mmap_zstd_store();
     test_hardware_adapters();
+    test_linux_batch_receiver();
     if (failures) return 1;
     std::cout << "All MarketCapture tests passed\n";
 }

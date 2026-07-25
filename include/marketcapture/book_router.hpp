@@ -23,7 +23,7 @@ public:
     [[nodiscard]] const OrderBook* find(const std::string& symbol) const noexcept;
     [[nodiscard]] std::size_t shard_count() const noexcept { return shards_.size(); }
     [[nodiscard]] std::size_t symbol_count() const noexcept;
-    [[nodiscard]] std::size_t order_count() const noexcept { return order_to_shard_.size(); }
+    [[nodiscard]] std::size_t order_count() const noexcept { return order_routes_.size(); }
     [[nodiscard]] std::vector<RoutedOrder> active_orders() const;
     void clear();
 
@@ -31,11 +31,15 @@ private:
     struct Shard {
         std::unordered_map<std::string, OrderBook> books;
     };
+    struct OrderRoute {
+        std::size_t shard{};
+        OrderBook* book{};
+    };
 
     OrderBook& book_for(const std::string& symbol);
     OrderBook& book_for_order(std::uint64_t order_id);
     std::vector<Shard> shards_;
-    std::unordered_map<std::uint64_t, std::size_t> order_to_shard_;
+    std::unordered_map<std::uint64_t, OrderRoute> order_routes_;
 };
 
 } // namespace marketcapture

@@ -22,6 +22,7 @@ machine-specific binary profile.
 - SPSC storage is fixed at compile time; power-of-two masking replaces division.
 - Producer and consumer cursors occupy separate cache lines.
 - Symbols are assigned to stable shards, allowing one writer per shard.
+- Order references resolve directly to stable book pointers with no shard scan.
 - Informational ITCH messages bypass order-book mutation.
 - Latency sample sorting happens after measurement, not in the update path.
 

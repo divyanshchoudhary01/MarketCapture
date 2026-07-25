@@ -63,6 +63,8 @@ Every original milestone is complete and covered by the build or test suite.
 - [x] Linux `SO_TIMESTAMPING` hardware timestamp receiver
 - [x] FPGA DMA record ABI, ring consumer, and simulator
 - [x] mmap append-only Zstd block store
+- [x] Linux `recvmmsg` batch receiver
+- [x] Optional fixed-buffer io_uring receive queue
 - [ ] Publish line-rate results from a supported DPDK NIC
 - [ ] Publish timestamp accuracy from a PTP-synchronized NIC
 - [ ] Validate the DMA ABI against a selected FPGA card and driver
