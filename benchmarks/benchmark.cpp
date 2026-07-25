@@ -1,10 +1,14 @@
 #include "marketcapture/itch.hpp"
+#include "marketcapture/book_router.hpp"
+#include "marketcapture/exchange_simulator.hpp"
+#include "marketcapture/latency.hpp"
 #include "marketcapture/pipeline.hpp"
 #include "marketcapture/ring_buffer.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 
 namespace {
@@ -54,9 +58,34 @@ int main(int argc, char** argv) {
     if (delivered != iterations) return 5;
     const auto pipeline_ns = std::chrono::duration<double, std::nano>(elapsed).count() / iterations;
 
-    std::cout << "iterations=" << iterations
+    marketcapture::ExchangeSimulator simulator(123);
+    auto simulated = simulator.generate(static_cast<std::size_t>(iterations));
+    marketcapture::ItchParser itch;
+    marketcapture::MoldUdp64Decoder mold;
+    marketcapture::ShardedBookRouter router(8);
+    std::vector<std::uint64_t> latencies;
+    latencies.reserve(static_cast<std::size_t>(iterations));
+    start = std::chrono::steady_clock::now();
+    for (const auto& simulated_packet : simulated) {
+        const auto before = std::chrono::steady_clock::now();
+        const auto decoded = mold.decode(simulated_packet.datagram);
+        router.apply(itch.parse(decoded.messages.front()));
+        const auto after = std::chrono::steady_clock::now();
+        latencies.push_back(static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(after - before).count()));
+    }
+    elapsed = std::chrono::steady_clock::now() - start;
+    const auto book_rate = iterations / std::chrono::duration<double>(elapsed).count();
+    const auto percentiles = marketcapture::summarize_latency(latencies);
+
+    std::cout << std::fixed << std::setprecision(2)
+              << "iterations=" << iterations
               << " itch_parse_ns=" << parse_ns
               << " spsc_roundtrip_ns=" << roundtrip_ns
               << " mold_to_event_ns=" << pipeline_ns
-              << " mold_to_event_mps=" << 1'000'000'000.0 / pipeline_ns << '\n';
+              << " mold_to_event_mps=" << 1'000'000'000.0 / pipeline_ns
+              << " book_updates_per_sec=" << book_rate
+              << " end_to_end_p50_ns=" << percentiles.p50_ns
+              << " end_to_end_p99_ns=" << percentiles.p99_ns
+              << " end_to_end_p999_ns=" << percentiles.p999_ns << '\n';
 }

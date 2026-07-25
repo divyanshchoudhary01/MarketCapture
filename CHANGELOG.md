@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.0
+
+### Added
+
+- Multi-symbol sharded order-book router
+- A/B feed arbitrator with duplicate suppression and bounded gap recovery
+- DLT_USER0 PCAP capture and deterministic replay
+- Two-slot checksummed checkpoint recovery
+- Seeded exchange simulator and end-to-end hiring showcase
+- Exact p50/p99/p99.9 reporting and sharded-book throughput benchmark
+- ASan/UBSan jobs, malformed-prefix tests, and libFuzzer targets
+- Architecture, recovery, profiling, and reference-performance reports
+
 ## v1.0.0
 
 ### Added

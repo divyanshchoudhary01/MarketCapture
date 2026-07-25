@@ -61,3 +61,15 @@ Every original milestone is complete and covered by the build or test suite.
 
 - DPDK kernel bypass and hardware timestamping
 - FPGA feed-handler integration
+
+## Hiring-grade reliability phase
+
+- [x] Multi-symbol sharded order-book routing
+- [x] A/B duplicate suppression, arbitration, and automatic gap requests
+- [x] PCAP capture and deterministic offline playback
+- [x] Checksummed two-generation checkpoints and restart recovery
+- [x] Seeded exchange simulator with reproducible valid order flow
+- [x] Malformed-input suites, ASan/UBSan CI, and libFuzzer targets
+- [x] Throughput and p50/p99/p99.9 benchmark reporting
+- [x] Profiling methodology and optimization analysis
+- [x] End-to-end loss/recovery/restart showcase

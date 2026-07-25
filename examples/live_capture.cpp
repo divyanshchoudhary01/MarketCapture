@@ -1,6 +1,7 @@
 #include "marketcapture/config.hpp"
 #include "marketcapture/live_feed.hpp"
 #include "marketcapture/pipeline.hpp"
+#include "marketcapture/pcap.hpp"
 #include "marketcapture/recorder.hpp"
 #include "marketcapture/types.hpp"
 #include <atomic>
@@ -28,6 +29,9 @@ int main(int argc, char** argv) {
         std::unique_ptr<marketcapture::TickRecorder> recorder;
         if (!config.record_path.empty())
             recorder = std::make_unique<marketcapture::TickRecorder>(config.record_path);
+        std::unique_ptr<marketcapture::PcapWriter> pcap;
+        if (!config.pcap_path.empty())
+            pcap = std::make_unique<marketcapture::PcapWriter>(config.pcap_path);
 
         std::atomic<std::uint64_t> packets{0};
         std::atomic<std::uint64_t> rejected_packets{0};
@@ -46,6 +50,11 @@ int main(int argc, char** argv) {
             try {
                 feed.run([&](std::span<const std::uint8_t> datagram) {
                     const auto packet_number = packets.fetch_add(1) + 1;
+                    if (pcap) {
+                        const auto now = std::chrono::system_clock::now().time_since_epoch();
+                        pcap->write(datagram, static_cast<std::uint64_t>(
+                            std::chrono::duration_cast<std::chrono::nanoseconds>(now).count()));
+                    }
                     try {
                         (void)pipeline.process(datagram);
                     } catch (const std::exception& error) {
@@ -65,6 +74,7 @@ int main(int argc, char** argv) {
         receiver.join();
         if (receiver_error) std::rethrow_exception(receiver_error);
         if (recorder) recorder->flush();
+        if (pcap) pcap->flush();
 
         const auto& metrics = pipeline.metrics();
         std::cout << "packets=" << packets.load()

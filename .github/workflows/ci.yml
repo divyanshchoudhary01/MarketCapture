@@ -44,3 +44,44 @@ jobs:
       - name: Run Benchmarks
         run: |
           ./build/marketcapture_benchmark 100000
+
+      - name: Run Hiring-Grade Showcase
+        run: |
+          ./build/marketcapture_showcase 10000 build/showcase
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ASan and UBSan
+        run: >
+          cmake -S . -B build-sanitized -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DMARKETCAPTURE_ENABLE_ASAN=ON
+          -DMARKETCAPTURE_ENABLE_UBSAN=ON
+          -DMARKETCAPTURE_BUILD_EXAMPLES=OFF
+          -DMARKETCAPTURE_BUILD_BENCHMARKS=OFF
+      - name: Build
+        run: cmake --build build-sanitized
+      - name: Test malformed and normal inputs
+        run: ctest --test-dir build-sanitized --output-on-failure
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure fuzzers
+        run: >
+          cmake -S . -B build-fuzz -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DMARKETCAPTURE_BUILD_FUZZERS=ON
+          -DMARKETCAPTURE_BUILD_TESTS=OFF
+          -DMARKETCAPTURE_BUILD_EXAMPLES=OFF
+          -DMARKETCAPTURE_BUILD_BENCHMARKS=OFF
+      - name: Build fuzz targets
+        run: cmake --build build-fuzz
+      - name: Smoke fuzz protocol boundaries
+        run: |
+          ./build-fuzz/fuzz_itch -max_total_time=5
+          ./build-fuzz/fuzz_moldudp64 -max_total_time=5

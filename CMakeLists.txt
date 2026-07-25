@@ -1,14 +1,22 @@
 cmake_minimum_required(VERSION 3.20)
-project(MarketCapture VERSION 1.0.0 LANGUAGES CXX)
+project(MarketCapture VERSION 1.1.0 LANGUAGES CXX)
 
 option(MARKETCAPTURE_BUILD_TESTS "Build unit tests" ON)
 option(MARKETCAPTURE_BUILD_EXAMPLES "Build examples" ON)
 option(MARKETCAPTURE_BUILD_BENCHMARKS "Build performance benchmark" ON)
+option(MARKETCAPTURE_BUILD_FUZZERS "Build libFuzzer targets (Clang only)" OFF)
+option(MARKETCAPTURE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(MARKETCAPTURE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
 add_library(marketcapture
+    src/book_router.cpp
+    src/checkpoint.cpp
     src/itch.cpp
     src/config.cpp
+    src/exchange_simulator.cpp
+    src/feed_arbitrator.cpp
     src/moldudp64.cpp
+    src/pcap.cpp
     src/pipeline.cpp
     src/order_book.cpp
     src/recorder.cpp
@@ -28,6 +36,14 @@ endif()
 if(WIN32)
     target_link_libraries(marketcapture PUBLIC ws2_32)
 endif()
+if(MARKETCAPTURE_ENABLE_ASAN AND NOT MSVC)
+    target_compile_options(marketcapture PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(marketcapture PUBLIC -fsanitize=address)
+endif()
+if(MARKETCAPTURE_ENABLE_UBSAN AND NOT MSVC)
+    target_compile_options(marketcapture PUBLIC -fsanitize=undefined -fno-omit-frame-pointer)
+    target_link_options(marketcapture PUBLIC -fsanitize=undefined)
+endif()
 
 if(MARKETCAPTURE_BUILD_EXAMPLES)
     add_executable(marketcapture_demo examples/demo.cpp)
@@ -36,6 +52,24 @@ if(MARKETCAPTURE_BUILD_EXAMPLES)
     add_executable(marketcapture_live examples/live_capture.cpp)
     find_package(Threads REQUIRED)
     target_link_libraries(marketcapture_live PRIVATE MarketCapture::marketcapture Threads::Threads)
+
+    add_executable(marketcapture_showcase examples/hiring_demo.cpp)
+    target_link_libraries(marketcapture_showcase PRIVATE MarketCapture::marketcapture)
+endif()
+
+if(MARKETCAPTURE_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "Fuzz targets require Clang")
+    endif()
+    target_compile_options(marketcapture PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+    target_link_options(marketcapture PUBLIC -fsanitize=address,undefined)
+    foreach(FUZZ_TARGET itch moldudp64)
+        add_executable(fuzz_${FUZZ_TARGET} fuzz/fuzz_${FUZZ_TARGET}.cpp)
+        target_link_libraries(fuzz_${FUZZ_TARGET} PRIVATE MarketCapture::marketcapture)
+        target_compile_options(fuzz_${FUZZ_TARGET} PRIVATE -fsanitize=fuzzer,address,undefined)
+        target_link_options(fuzz_${FUZZ_TARGET} PRIVATE -fsanitize=fuzzer,address,undefined)
+    endforeach()
 endif()
 
 if(MARKETCAPTURE_BUILD_BENCHMARKS)
@@ -60,6 +94,9 @@ include(CMakePackageConfigHelpers)
 install(TARGETS marketcapture EXPORT MarketCaptureTargets)
 if(TARGET marketcapture_live)
     install(TARGETS marketcapture_live RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(TARGET marketcapture_showcase)
+    install(TARGETS marketcapture_showcase RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES config/feed.conf.example DESTINATION ${CMAKE_INSTALL_DATADIR}/marketcapture)

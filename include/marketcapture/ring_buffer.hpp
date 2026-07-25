@@ -13,6 +13,8 @@ namespace marketcapture {
 template <typename T, std::size_t Capacity>
 class SpscRingBuffer {
     static_assert(Capacity >= 2);
+    static_assert((Capacity & (Capacity - 1)) == 0,
+                  "SPSC storage slots must be a power of two");
 public:
     [[nodiscard]] bool try_push(T value) noexcept(std::is_nothrow_move_assignable_v<T>) {
         const auto head = head_.load(std::memory_order_relaxed);
@@ -39,7 +41,7 @@ public:
 
 private:
     static constexpr std::size_t increment(std::size_t value) noexcept {
-        return (value + 1) % Capacity;
+        return (value + 1) & (Capacity - 1);
     }
     std::array<T, Capacity> storage_{};
     alignas(64) std::atomic<std::size_t> head_{0};

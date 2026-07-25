@@ -1,9 +1,15 @@
 #include "marketcapture/config.hpp"
+#include "marketcapture/book_router.hpp"
+#include "marketcapture/checkpoint.hpp"
+#include "marketcapture/exchange_simulator.hpp"
+#include "marketcapture/feed_arbitrator.hpp"
 #include "marketcapture/itch.hpp"
+#include "marketcapture/latency.hpp"
 #include "marketcapture/metrics.hpp"
 #include "marketcapture/moldudp64.hpp"
 #include "marketcapture/order_book.hpp"
 #include "marketcapture/pipeline.hpp"
+#include "marketcapture/pcap.hpp"
 #include "marketcapture/recorder.hpp"
 #include "marketcapture/ring_buffer.hpp"
 #include "marketcapture/snapshot.hpp"
@@ -109,10 +115,11 @@ void test_pipeline() {
 }
 
 void test_ring() {
-    marketcapture::SpscRingBuffer<int, 3> queue;
-    CHECK(queue.capacity() == 2);
-    CHECK(queue.try_push(1)); CHECK(queue.try_push(2)); CHECK(!queue.try_push(3));
-    CHECK(queue.try_pop() == 1); CHECK(queue.try_pop() == 2);
+    marketcapture::SpscRingBuffer<int, 4> queue;
+    CHECK(queue.capacity() == 3);
+    CHECK(queue.try_push(1)); CHECK(queue.try_push(2)); CHECK(queue.try_push(3));
+    CHECK(!queue.try_push(4));
+    CHECK(queue.try_pop() == 1); CHECK(queue.try_pop() == 2); CHECK(queue.try_pop() == 3);
     CHECK(!queue.try_pop().has_value()); CHECK(queue.empty());
 }
 
@@ -177,20 +184,117 @@ void test_config() {
         std::ofstream output(path);
         output << "multicast_group=233.1.2.3\nport=18000\n"
                << "interface_address=127.0.0.1\nreceive_buffer_bytes=1048576\n"
-               << "record_path=test.ticks\nmax_packets=25\n";
+               << "record_path=test.ticks\npcap_path=test.pcap\nmax_packets=25\n";
     }
     const auto config = marketcapture::LiveFeedConfig::load(path);
     CHECK(config.multicast_group == "233.1.2.3");
     CHECK(config.port == 18000);
     CHECK(config.receive_buffer_bytes == 1048576);
     CHECK(config.max_packets == 25);
+    CHECK(config.pcap_path == "test.pcap");
     std::filesystem::remove(path);
+}
+
+void test_malformed_prefixes() {
+    const auto valid = add_message(77);
+    for (std::size_t size = 0; size < valid.size(); ++size) {
+        throws([&] {
+            (void)marketcapture::ItchParser{}.parse(
+                std::span<const std::uint8_t>(valid.data(), size));
+        });
+    }
+    const auto packet = mold_packet(1, valid);
+    for (std::size_t size = 0; size < packet.size(); ++size) {
+        throws([&] {
+            (void)marketcapture::MoldUdp64Decoder{}.decode(
+                std::span<const std::uint8_t>(packet.data(), size));
+        });
+    }
+}
+
+void test_router_and_checkpoint() {
+    using namespace marketcapture;
+    ShardedBookRouter router(4);
+    router.apply(AddOrder{1, 101, Side::buy, 10, "AAPL", 100});
+    router.apply(AddOrder{2, 202, Side::sell, 20, "MSFT", 200});
+    CHECK(router.symbol_count() == 2 && router.order_count() == 2);
+    CHECK(router.find("AAPL")->best_bid()->shares == 10);
+    router.apply(ReplaceOrder{3, 101, 102, 12, 101});
+    CHECK(router.find("AAPL")->best_bid()->price == 101);
+
+    const auto base = std::filesystem::temp_directory_path() / "marketcapture_checkpoint";
+    CheckpointStore store(base);
+    CHECK(store.save(router, 10).generation == 1);
+    router.apply(AddOrder{4, 303, Side::buy, 5, "NVDA", 300});
+    CHECK(store.save(router, 20).generation == 2);
+    {
+        std::ofstream corrupt(base.string() + ".a", std::ios::binary | std::ios::trunc);
+        corrupt << "broken";
+    }
+    ShardedBookRouter restored(4);
+    const auto loaded = store.load(restored);
+    CHECK(loaded.generation == 1 && loaded.sequence == 10);
+    CHECK(restored.order_count() == 2 && restored.find("NVDA") == nullptr);
+    std::filesystem::remove(base.string() + ".a");
+    std::filesystem::remove(base.string() + ".b");
+}
+
+void test_arbitration_and_pcap() {
+    using namespace marketcapture;
+    ExchangeSimulator simulator(42, {"AAPL"});
+    const auto packets = simulator.generate(4);
+    std::vector<std::uint64_t> emitted;
+    std::vector<RecoveryRequest> requests;
+    FeedArbitrator arbitrator(
+        [&](const ArbitratedMessage& message) { emitted.push_back(message.sequence); },
+        [&](const RecoveryRequest& request) { requests.push_back(request); }, 1);
+    CHECK(arbitrator.ingest(FeedChannel::a, packets[0].datagram) == 1);
+    CHECK(arbitrator.ingest(FeedChannel::a, packets[2].datagram) == 1);
+    CHECK(emitted.size() == 1 && requests.size() == 1);
+    CHECK(requests[0].first_sequence == 2 && requests[0].last_sequence == 2);
+    CHECK(arbitrator.ingest(FeedChannel::b, packets[1].datagram) == 1);
+    CHECK(emitted.size() == 3 && emitted[2] == 3);
+    CHECK(arbitrator.ingest(FeedChannel::b, packets[0].datagram) == 0);
+    CHECK(arbitrator.duplicates() == 1);
+
+    const auto path = std::filesystem::temp_directory_path() / "marketcapture_test.pcap";
+    {
+        PcapWriter writer(path);
+        writer.write(packets[0].datagram, 1'000'000'000);
+        writer.write(packets[1].datagram, 1'000'001'000);
+        writer.flush();
+    }
+    std::vector<std::vector<std::uint8_t>> replayed;
+    CHECK(PcapReplay{}.replay(path, [&](std::uint64_t timestamp,
+                                       std::span<const std::uint8_t> datagram) {
+        CHECK(timestamp >= 1'000'000'000);
+        replayed.emplace_back(datagram.begin(), datagram.end());
+    }) == 2);
+    CHECK(replayed[0] == packets[0].datagram && replayed[1] == packets[1].datagram);
+    marketcapture::PcapRecoverySource recovery(path);
+    std::vector<std::vector<std::uint8_t>> recovered;
+    CHECK(recovery.recover(2, 2, [&](std::span<const std::uint8_t> datagram) {
+        recovered.emplace_back(datagram.begin(), datagram.end());
+    }) == 1);
+    CHECK(recovered.front() == packets[1].datagram);
+    std::filesystem::remove(path);
+}
+
+void test_simulator_and_latency() {
+    marketcapture::ExchangeSimulator first(7);
+    marketcapture::ExchangeSimulator second(7);
+    for (int i = 0; i < 20; ++i) CHECK(first.next().datagram == second.next().datagram);
+    const std::vector<std::uint64_t> samples{10, 20, 30, 40, 1000};
+    const auto latency = marketcapture::summarize_latency(samples);
+    CHECK(latency.minimum_ns == 10 && latency.p50_ns == 30);
+    CHECK(latency.p99_ns == 1000 && latency.p999_ns == 1000);
 }
 }
 
 int main() {
     test_itch(); test_mold(); test_pipeline(); test_ring(); test_book(); test_recording();
-    test_metrics(); test_config();
+    test_metrics(); test_config(); test_router_and_checkpoint();
+    test_arbitration_and_pcap(); test_simulator_and_latency(); test_malformed_prefixes();
     if (failures) return 1;
     std::cout << "All MarketCapture tests passed\n";
 }

@@ -1,7 +1,22 @@
 # MarketCapture
 
-A C++20 low-latency market-data framework implementing every milestone from
-the original v0.1–v1.0 roadmap.
+A C++20 low-latency market-data platform built to demonstrate exchange
+protocols, deterministic recovery, concurrency, persistence, and performance
+engineering for HFT-oriented systems roles.
+
+![MarketCapture architecture](docs/images/market_data_capture_architecture.png)
+
+## Hiring-grade differentiators
+
+- Multi-symbol order books with stable shard routing
+- A/B feed arbitration, duplicate suppression, gap blocking, and recovery callbacks
+- Raw MoldUDP64 PCAP capture and deterministic offline playback
+- Checksummed two-slot checkpoints with corrupt-generation fallback
+- Seeded exchange simulator producing valid, reproducible order lifecycles
+- ASan/UBSan CI, malformed-prefix tests, and libFuzzer targets
+- Throughput and p50/p99/p99.9 end-to-end measurements
+- Architecture, recovery, storage, and profiling design documents
+- One-command showcase proving loss recovery and restart equivalence
 
 ## Roadmap status
 
@@ -54,6 +69,16 @@ Run the release-mode microbenchmark (optional argument: iteration count):
 ./build/marketcapture_benchmark 1000000
 ```
 
+Run the complete portfolio demonstration:
+
+```sh
+./build/marketcapture_showcase 10000 demo-output
+```
+
+The demo generates an A/B feed, independently drops packets on both channels,
+captures PCAP, requests recovery, replays missing data, builds six symbol books,
+writes a checkpoint, restarts, and verifies identical order/symbol counts.
+
 Run a live licensed feed:
 
 ```sh
@@ -64,6 +89,15 @@ cp config/feed.conf.example feed.conf
 
 See [Exchange connectivity](docs/EXCHANGE_CONNECTIVITY.md) for deployment and
 acceptance criteria.
+
+Design and evidence:
+
+- [Hiring-grade architecture](docs/architecture/hiring_grade_architecture.md)
+- [A/B arbitration](docs/design/FeedArbitration.md)
+- [Checkpoint recovery](docs/design/CheckpointRecovery.md)
+- [PCAP replay](docs/design/PcapReplay.md)
+- [Reference benchmark](docs/benchmarks/2026-07-25-reference.md)
+- [Profiling and optimization notes](docs/benchmarks/profiling.md)
 
 On multi-config Windows generators the executable is under `build/Release`.
 
@@ -105,6 +139,8 @@ order.
 - Market-data entitlement and multicast network delivery are provisioned by the
   exchange or feed provider; they are not application passwords embedded in
   source code.
+- Recovery callbacks define the ordering contract; vendor retransmission
+  transport remains provider-specific.
 
 ## License
 

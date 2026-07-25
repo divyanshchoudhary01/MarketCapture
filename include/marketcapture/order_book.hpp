@@ -16,6 +16,13 @@ struct Level {
     std::size_t orders{};
 };
 
+struct ActiveOrder {
+    std::uint64_t order_id{};
+    Side side{};
+    std::uint32_t price{};
+    std::uint32_t shares{};
+};
+
 class OrderBook {
 public:
     void apply(const Event& event);
@@ -24,6 +31,10 @@ public:
     [[nodiscard]] std::vector<Level> bids(std::size_t depth) const;
     [[nodiscard]] std::vector<Level> asks(std::size_t depth) const;
     [[nodiscard]] std::size_t order_count() const noexcept { return orders_.size(); }
+    [[nodiscard]] bool contains_order(std::uint64_t order_id) const noexcept {
+        return orders_.contains(order_id);
+    }
+    [[nodiscard]] std::vector<ActiveOrder> active_orders() const;
     [[nodiscard]] const std::string& symbol() const noexcept { return symbol_; }
     void clear();
 

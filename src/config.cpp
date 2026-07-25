@@ -57,6 +57,7 @@ LiveFeedConfig LiveFeedConfig::load(const std::filesystem::path& path) {
                 throw std::invalid_argument("receive_buffer_bytes is out of range");
             config.receive_buffer_bytes = static_cast<int>(parsed);
         } else if (key == "record_path") config.record_path = value;
+        else if (key == "pcap_path") config.pcap_path = value;
         else if (key == "max_packets") config.max_packets = number(value, key);
         else throw std::invalid_argument("unknown config key: " + key);
     }

@@ -4,6 +4,7 @@ port=18000
 interface_address=10.20.30.40
 receive_buffer_bytes=16777216
 record_path=capture.ticks
+pcap_path=capture.pcap
 
 # Set to zero for continuous capture. Use a finite value for acceptance tests.
 max_packets=0

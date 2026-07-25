@@ -75,6 +75,17 @@ std::vector<Level> OrderBook::asks(std::size_t depth) const {
     for (auto it = asks_.begin(); it != asks_.end() && result.size() < depth; ++it) result.push_back(it->second);
     return result;
 }
+std::vector<ActiveOrder> OrderBook::active_orders() const {
+    std::vector<ActiveOrder> result;
+    result.reserve(orders_.size());
+    for (const auto& [id, order] : orders_)
+        result.push_back({id, order.side, order.price, order.shares});
+    std::sort(result.begin(), result.end(),
+        [](const ActiveOrder& left, const ActiveOrder& right) {
+            return left.order_id < right.order_id;
+        });
+    return result;
+}
 void OrderBook::clear() {
     symbol_.clear(); orders_.clear(); bids_.clear(); asks_.clear();
 }
