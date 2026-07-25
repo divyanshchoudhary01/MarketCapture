@@ -87,7 +87,7 @@ Every original milestone is complete and covered by the build or test suite.
 - [ ] Publish a sanitized provider-entitled production capture report
 - [ ] Publish bare-metal Linux flamegraph and pinned-core benchmark results
 - [ ] Record and link the polished three-minute demonstration
-- [ ] Tag the next release after evidence artifacts are reviewed
+- [x] v2.0.0 tagged-release automation and packaged Linux artifact
 - [x] Official BinaryFile streaming integration and independent golden decoder
 - [x] Multishot io_uring provided-buffer receiver
 - [x] DPDK runtime harness with NIC/engine telemetry
