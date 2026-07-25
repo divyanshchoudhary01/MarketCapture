@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: sudo apt-get update && sudo apt-get install -y ninja-build
-      - run: ./scripts/linux_evidence.sh evidence/github-hosted
+      - run: bash scripts/linux_evidence.sh evidence/github-hosted
       - uses: actions/upload-artifact@v4
         with:
           name: linux-evidence-${{ github.sha }}

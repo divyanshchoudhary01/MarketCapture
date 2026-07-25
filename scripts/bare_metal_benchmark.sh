@@ -9,4 +9,4 @@ grep -E 'HugePages|Hugepagesize' /proc/meminfo > "$out/hugepages.txt"
 numactl --hardware > "$out/numa.txt"
 taskset -pc "$cpu" $$ > "$out/affinity.txt"
 numactl --cpunodebind="$node" --membind="$node" \
-  taskset -c "$cpu" ./scripts/linux_evidence.sh "$out"
+  taskset -c "$cpu" bash scripts/linux_evidence.sh "$out"

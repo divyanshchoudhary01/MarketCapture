@@ -13,7 +13,7 @@ the fixed hot parser, checks order/non-order classification, and emits message
 counts by type. It never loads the session into memory.
 
 ```sh
-./scripts/fetch_official_itch.sh \
+bash scripts/fetch_official_itch.sh \
   'https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/<file>.gz' \
   '<md5-from-official-directory>' data/<file>.gz
 gzip -dc data/<file>.gz | ./build/marketcapture_validate_itch - \

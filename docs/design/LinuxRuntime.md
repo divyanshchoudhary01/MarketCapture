@@ -3,8 +3,8 @@
 Prepare a dedicated test host only after reviewing the script:
 
 ```sh
-sudo CPU=2 HUGEPAGES=1024 ./scripts/prepare_linux_host.sh
-CPU=2 NUMA_NODE=0 ./scripts/bare_metal_benchmark.sh evidence/host-a
+sudo CPU=2 HUGEPAGES=1024 bash scripts/prepare_linux_host.sh
+CPU=2 NUMA_NODE=0 bash scripts/bare_metal_benchmark.sh evidence/host-a
 ```
 
 For stronger isolation add `isolcpus=2 nohz_full=2 rcu_nocbs=2` to the kernel

@@ -57,7 +57,7 @@ jobs:
         env:
           BUILD_DIR: build
           ITERATIONS: 3
-        run: ./scripts/soak_and_crash.sh build/soak
+        run: bash scripts/soak_and_crash.sh build/soak
 
   sanitizers:
     runs-on: ubuntu-latest
