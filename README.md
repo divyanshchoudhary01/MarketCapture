@@ -17,6 +17,10 @@ engineering for HFT-oriented systems roles.
 - Throughput and p50/p99/p99.9 end-to-end measurements
 - Architecture, recovery, storage, and profiling design documents
 - One-command showcase proving loss recovery and restart equivalence
+- mmap append-only block storage using the real Zstandard runtime
+- Linux `SO_TIMESTAMPING` receiver with hardware/software timestamp quality
+- Optional DPDK burst source that strips Ethernet/IPv4/UDP into MoldUDP64 payloads
+- Versioned 128-byte FPGA DMA event ABI with acquire/release ownership
 
 ## Roadmap status
 
@@ -77,7 +81,8 @@ Run the complete portfolio demonstration:
 
 The demo generates an A/B feed, independently drops packets on both channels,
 captures PCAP, requests recovery, replays missing data, builds six symbol books,
-writes a checkpoint, restarts, and verifies identical order/symbol counts.
+writes a compressed mmap tick segment and checkpoint, restarts, and verifies
+identical order/symbol counts.
 
 Run a live licensed feed:
 
@@ -98,6 +103,8 @@ Design and evidence:
 - [PCAP replay](docs/design/PcapReplay.md)
 - [Reference benchmark](docs/benchmarks/2026-07-25-reference.md)
 - [Profiling and optimization notes](docs/benchmarks/profiling.md)
+- [mmap Zstd store](docs/design/MmapZstdStore.md)
+- [Hardware acceleration adapters](docs/design/HardwareAcceleration.md)
 
 On multi-config Windows generators the executable is under `build/Release`.
 
@@ -141,6 +148,8 @@ order.
   source code.
 - Recovery callbacks define the ordering contract; vendor retransmission
   transport remains provider-specific.
+- DPDK builds with `-DMARKETCAPTURE_ENABLE_DPDK=ON` and requires an initialized
+  EAL port/queue. Physical NIC and FPGA claims require the target hardware.
 
 ## License
 

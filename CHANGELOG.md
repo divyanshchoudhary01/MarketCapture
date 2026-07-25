@@ -12,6 +12,10 @@
 - Exact p50/p99/p99.9 reporting and sharded-book throughput benchmark
 - ASan/UBSan jobs, malformed-prefix tests, and libFuzzer targets
 - Architecture, recovery, profiling, and reference-performance reports
+- mmap-backed Zstd block storage with durable commit and replay validation
+- Linux NIC hardware timestamp receive adapter
+- Optional DPDK burst source with Ethernet/IPv4/UDP extraction
+- FPGA DMA record ABI, lock-free consumer, and simulator coverage
 
 ## v1.0.0
 

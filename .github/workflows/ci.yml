@@ -85,3 +85,22 @@ jobs:
         run: |
           ./build-fuzz/fuzz_itch -max_total_time=5
           ./build-fuzz/fuzz_moldudp64 -max_total_time=5
+
+  dpdk-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install DPDK development package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libdpdk-dev
+      - name: Configure DPDK adapter
+        run: >
+          cmake -S . -B build-dpdk -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DMARKETCAPTURE_ENABLE_DPDK=ON
+          -DMARKETCAPTURE_BUILD_TESTS=OFF
+          -DMARKETCAPTURE_BUILD_EXAMPLES=OFF
+          -DMARKETCAPTURE_BUILD_BENCHMARKS=OFF
+      - name: Build DPDK adapter
+        run: cmake --build build-dpdk

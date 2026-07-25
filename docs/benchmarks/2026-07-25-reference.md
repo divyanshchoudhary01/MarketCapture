@@ -20,6 +20,8 @@
 | End-to-end p50 | 1,400 ns |
 | End-to-end p99 | 3,000 ns |
 | End-to-end p99.9 | 24,800 ns |
+| mmap Zstd durable write | 236 MiB/s |
+| mmap Zstd replay | 300 MiB/s |
 
 These numbers include wall-clock measurement overhead and unordered-map book
 routing. They are a reproducible baseline, not a universal latency claim.

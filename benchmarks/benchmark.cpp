@@ -2,6 +2,7 @@
 #include "marketcapture/book_router.hpp"
 #include "marketcapture/exchange_simulator.hpp"
 #include "marketcapture/latency.hpp"
+#include "marketcapture/mmap_store.hpp"
 #include "marketcapture/pipeline.hpp"
 #include "marketcapture/ring_buffer.hpp"
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cstdint>
 #include <iostream>
 #include <iomanip>
+#include <filesystem>
 #include <vector>
 
 namespace {
@@ -78,6 +80,36 @@ int main(int argc, char** argv) {
     const auto book_rate = iterations / std::chrono::duration<double>(elapsed).count();
     const auto percentiles = marketcapture::summarize_latency(latencies);
 
+    const auto store_path = std::filesystem::temp_directory_path() /
+        "marketcapture_benchmark.mcz";
+    std::filesystem::remove(store_path);
+    std::vector<std::uint8_t> storage_input(8 * 1024 * 1024);
+    for (std::size_t index = 0; index < storage_input.size(); ++index)
+        storage_input[index] = static_cast<std::uint8_t>((index * 31) & 0xff);
+    double recorder_mib_per_second = 0;
+    double replay_mib_per_second = 0;
+    double compression_ratio = 0;
+    {
+        marketcapture::MappedZstdStore store(store_path, 16 * 1024 * 1024);
+        const auto write_start = std::chrono::steady_clock::now();
+        store.append(storage_input, 1);
+        store.flush();
+        const auto write_elapsed = std::chrono::steady_clock::now() - write_start;
+        recorder_mib_per_second = 8.0 / std::chrono::duration<double>(write_elapsed).count();
+        const auto read_start = std::chrono::steady_clock::now();
+        std::size_t replayed_bytes = 0;
+        (void)store.replay([&](std::span<const std::uint8_t> block) {
+            replayed_bytes += block.size();
+        });
+        const auto read_elapsed = std::chrono::steady_clock::now() - read_start;
+        if (replayed_bytes != storage_input.size()) return 6;
+        replay_mib_per_second = 8.0 / std::chrono::duration<double>(read_elapsed).count();
+        const auto storage_stats = store.stats();
+        compression_ratio = static_cast<double>(storage_stats.compressed_bytes) /
+                            static_cast<double>(storage_stats.raw_bytes);
+    }
+    std::filesystem::remove(store_path);
+
     std::cout << std::fixed << std::setprecision(2)
               << "iterations=" << iterations
               << " itch_parse_ns=" << parse_ns
@@ -87,5 +119,8 @@ int main(int argc, char** argv) {
               << " book_updates_per_sec=" << book_rate
               << " end_to_end_p50_ns=" << percentiles.p50_ns
               << " end_to_end_p99_ns=" << percentiles.p99_ns
-              << " end_to_end_p999_ns=" << percentiles.p999_ns << '\n';
+              << " end_to_end_p999_ns=" << percentiles.p999_ns
+              << " mmap_zstd_write_mib_per_sec=" << recorder_mib_per_second
+              << " mmap_zstd_replay_mib_per_sec=" << replay_mib_per_second
+              << " mmap_zstd_ratio_percent=" << compression_ratio * 100.0 << '\n';
 }

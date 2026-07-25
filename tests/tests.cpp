@@ -2,11 +2,15 @@
 #include "marketcapture/book_router.hpp"
 #include "marketcapture/checkpoint.hpp"
 #include "marketcapture/exchange_simulator.hpp"
+#include "marketcapture/dpdk_source.hpp"
 #include "marketcapture/feed_arbitrator.hpp"
+#include "marketcapture/fpga_ring.hpp"
+#include "marketcapture/hardware_timestamp.hpp"
 #include "marketcapture/itch.hpp"
 #include "marketcapture/latency.hpp"
 #include "marketcapture/metrics.hpp"
 #include "marketcapture/moldudp64.hpp"
+#include "marketcapture/mmap_store.hpp"
 #include "marketcapture/order_book.hpp"
 #include "marketcapture/pipeline.hpp"
 #include "marketcapture/pcap.hpp"
@@ -289,12 +293,71 @@ void test_simulator_and_latency() {
     CHECK(latency.minimum_ns == 10 && latency.p50_ns == 30);
     CHECK(latency.p99_ns == 1000 && latency.p999_ns == 1000);
 }
+
+void test_mmap_zstd_store() {
+    const auto path = std::filesystem::temp_directory_path() / "marketcapture_mmap_zstd.store";
+    std::vector<std::uint8_t> first(32 * 1024, 'A');
+    std::vector<std::uint8_t> second(16 * 1024, 'B');
+    {
+        marketcapture::MappedZstdStore store(path, 1024 * 1024);
+        store.append(first);
+        store.append(second);
+        store.flush();
+        const auto stats = store.stats();
+        CHECK(stats.blocks == 2);
+        CHECK(stats.raw_bytes == first.size() + second.size());
+        CHECK(stats.compressed_bytes < stats.raw_bytes);
+    }
+    std::vector<std::vector<std::uint8_t>> replayed;
+    {
+        marketcapture::MappedZstdStore store(path, 1024 * 1024);
+        CHECK(store.replay([&](std::span<const std::uint8_t> block) {
+            replayed.emplace_back(block.begin(), block.end());
+        }) == 2);
+    }
+    CHECK(replayed[0] == first && replayed[1] == second);
+    std::filesystem::remove(path);
+}
+
+void test_hardware_adapters() {
+    std::vector<std::uint8_t> frame(14 + 20 + 8 + 4);
+    frame[12] = 0x08; frame[13] = 0x00;
+    frame[14] = 0x45; frame[14 + 9] = 17;
+    frame[14 + 20 + 4] = 0;
+    frame[14 + 20 + 5] = 12;
+    frame[42] = 'M'; frame[43] = 'O'; frame[44] = 'L'; frame[45] = 'D';
+    const auto payload = marketcapture::extract_ethernet_ipv4_udp_payload(frame);
+    CHECK(payload && payload->size() == 4 && (*payload)[0] == 'M');
+
+    marketcapture::FpgaRingSimulator fpga(4);
+    const std::array<std::uint8_t, 3> first{'A', 'B', 'C'};
+    const std::array<std::uint8_t, 2> second{'D', 'E'};
+    fpga.publish(10, 1000, first);
+    fpga.publish(11, 1001, second);
+    auto consumer = fpga.consumer();
+    std::vector<std::uint64_t> sequences;
+    CHECK(consumer.poll([&](std::uint64_t sequence, std::uint64_t timestamp,
+                            std::span<const std::uint8_t> bytes) {
+        sequences.push_back(sequence);
+        CHECK(timestamp >= 1000 && !bytes.empty());
+    }, 4) == 2);
+    CHECK(sequences.size() == 2 && sequences[0] == 10 && sequences[1] == 11);
+    CHECK(consumer.poll([](auto, auto, auto) {}, 4) == 0);
+
+#ifdef __linux__
+    CHECK(marketcapture::HardwareTimestampReceiver::platform_supported());
+#else
+    CHECK(!marketcapture::HardwareTimestampReceiver::platform_supported());
+#endif
+}
 }
 
 int main() {
     test_itch(); test_mold(); test_pipeline(); test_ring(); test_book(); test_recording();
     test_metrics(); test_config(); test_router_and_checkpoint();
     test_arbitration_and_pcap(); test_simulator_and_latency(); test_malformed_prefixes();
+    test_mmap_zstd_store();
+    test_hardware_adapters();
     if (failures) return 1;
     std::cout << "All MarketCapture tests passed\n";
 }

@@ -59,8 +59,13 @@ Every original milestone is complete and covered by the build or test suite.
 
 ## Future hardware-specific work
 
-- DPDK kernel bypass and hardware timestamping
-- FPGA feed-handler integration
+- [x] Optional DPDK burst RX adapter and UDP payload extraction
+- [x] Linux `SO_TIMESTAMPING` hardware timestamp receiver
+- [x] FPGA DMA record ABI, ring consumer, and simulator
+- [x] mmap append-only Zstd block store
+- [ ] Publish line-rate results from a supported DPDK NIC
+- [ ] Publish timestamp accuracy from a PTP-synchronized NIC
+- [ ] Validate the DMA ABI against a selected FPGA card and driver
 
 ## Hiring-grade reliability phase
 

@@ -4,6 +4,7 @@
 #include "marketcapture/feed_arbitrator.hpp"
 #include "marketcapture/itch.hpp"
 #include "marketcapture/pcap.hpp"
+#include "marketcapture/mmap_store.hpp"
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -20,6 +21,7 @@ int main(int argc, char** argv) {
         std::filesystem::create_directories(output);
         const auto pcap_path = output / "simulated-feed.pcap";
         const auto checkpoint_path = output / "books.checkpoint";
+        const auto mapped_path = output / "compressed-ticks.mcz";
 
         marketcapture::ExchangeSimulator simulator(0xC0FFEE,
             {"AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA"});
@@ -33,6 +35,19 @@ int main(int argc, char** argv) {
             }
             writer.flush();
         }
+        std::vector<std::uint8_t> raw_ticks;
+        for (const auto& packet : packets) {
+            if (packet.datagram.size() > 65535)
+                throw std::runtime_error("simulated datagram is too large");
+            raw_ticks.push_back(static_cast<std::uint8_t>(packet.datagram.size()));
+            raw_ticks.push_back(static_cast<std::uint8_t>(packet.datagram.size() >> 8));
+            raw_ticks.insert(raw_ticks.end(), packet.datagram.begin(), packet.datagram.end());
+        }
+        marketcapture::MappedZstdStore mapped_store(
+            mapped_path, raw_ticks.size() + 1024 * 1024);
+        mapped_store.append(raw_ticks, 3);
+        mapped_store.flush();
+        const auto mapped_stats = mapped_store.stats();
 
         marketcapture::PcapRecoverySource recovery_source(pcap_path);
         marketcapture::ItchParser parser;
@@ -89,6 +104,8 @@ int main(int argc, char** argv) {
                   << "  active_orders: " << books.order_count() << '\n'
                   << "  checkpoint_generation: " << saved.generation << '\n'
                   << "  restart_verified: yes\n"
+                  << "  mmap_zstd_raw_bytes: " << mapped_stats.raw_bytes << '\n'
+                  << "  mmap_zstd_compressed_bytes: " << mapped_stats.compressed_bytes << '\n'
                   << "  processing_messages_per_second: "
                   << static_cast<std::uint64_t>(packet_count / seconds) << '\n'
                   << "  pcap: " << pcap_path.string() << '\n';

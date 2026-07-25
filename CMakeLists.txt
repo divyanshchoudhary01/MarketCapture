@@ -7,6 +7,7 @@ option(MARKETCAPTURE_BUILD_BENCHMARKS "Build performance benchmark" ON)
 option(MARKETCAPTURE_BUILD_FUZZERS "Build libFuzzer targets (Clang only)" OFF)
 option(MARKETCAPTURE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(MARKETCAPTURE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(MARKETCAPTURE_ENABLE_DPDK "Build the DPDK burst packet source" OFF)
 
 add_library(marketcapture
     src/book_router.cpp
@@ -15,12 +16,16 @@ add_library(marketcapture
     src/config.cpp
     src/exchange_simulator.cpp
     src/feed_arbitrator.cpp
+    src/fpga_ring.cpp
+    src/hardware_timestamp.cpp
+    src/dpdk_source.cpp
     src/moldudp64.cpp
     src/pcap.cpp
     src/pipeline.cpp
     src/order_book.cpp
     src/recorder.cpp
     src/live_feed.cpp
+    src/mmap_store.cpp
 )
 add_library(MarketCapture::marketcapture ALIAS marketcapture)
 target_include_directories(marketcapture PUBLIC
@@ -28,6 +33,13 @@ target_include_directories(marketcapture PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 target_compile_features(marketcapture PUBLIC cxx_std_20)
+target_link_libraries(marketcapture PRIVATE ${CMAKE_DL_LIBS})
+if(MARKETCAPTURE_ENABLE_DPDK)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(DPDK REQUIRED IMPORTED_TARGET libdpdk)
+    target_link_libraries(marketcapture PRIVATE PkgConfig::DPDK)
+    target_compile_definitions(marketcapture PUBLIC MARKETCAPTURE_HAS_DPDK=1)
+endif()
 if(MSVC)
     target_compile_options(marketcapture PRIVATE /W4 /permissive-)
 else()
