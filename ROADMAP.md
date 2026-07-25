@@ -1,41 +1,63 @@
 # Roadmap
 
-## v0.1
+Every original milestone is complete and covered by the build or test suite.
 
-- Repository Structure
+## v0.1 — Repository Structure
 
-## v0.2
+- [x] C++20 library, public headers, examples, tests, installable CMake package
+- [x] Linux and Windows continuous integration
 
-- NASDAQ ITCH Parser
+## v0.2 — NASDAQ ITCH Parser
 
-## v0.3
+- [x] All 22 TotalView-ITCH 5.0 message types
+- [x] Big-endian integer decoding, fixed-width text normalization, strict sizes
+- [x] Validation for side, boolean, and printable fields
 
-- MoldUDP64 Decoder
+## v0.3 — MoldUDP64 Decoder
 
-## v0.4
+- [x] Session and sequence decoding
+- [x] Bounds-checked, zero-copy message spans
 
-- Lock-Free Ring Buffer
+## v0.4 — Lock-Free Ring Buffer
 
-## v0.5
+- [x] Bounded, wait-free SPSC queue with acquire/release publication
 
-- Snapshot Manager
+## v0.5 — Snapshot Manager
 
-## v0.6
+- [x] Sequence-tagged bid/ask depth snapshots
 
-- Order Book
+## v0.6 — Order Book
 
-## v0.7
+- [x] Price-level aggregation
+- [x] Add, attributed add, execute, priced execute, cancel, delete, and replace
+- [x] Best bid/ask and configurable depth
 
-- Recorder
+## v0.7 — Recorder
 
-## v0.8
+- [x] Versioned binary recording of normalized order-impacting events
+- [x] Corruption and truncation checks
 
-- Replay Engine
+## v0.8 — Replay Engine
 
-## v0.9
+- [x] Ordered callback replay with exact event counts
+- [x] Round-trip tests for every recordable order-event family
 
-- Metrics
+## v0.9 — Metrics
 
-## v1.0
+- [x] Atomic packet, message, error, and sequence-gap counters
+- [x] Nanosecond latency timer
+- [x] Release-mode ITCH and SPSC microbenchmark
 
-- Live Market Data
+## v1.0 — Live Market Data
+
+- [x] Cross-platform UDP multicast receiver
+- [x] Interruptible shutdown
+- [x] Validated file-based deployment configuration and receive-buffer tuning
+- [x] Runnable live capture with tick recording and acceptance metrics
+- [x] Integrated MoldUDP64 → ITCH event pipeline
+- [x] Session sequence tracking and gap detection
+
+## Future hardware-specific work
+
+- DPDK kernel bypass and hardware timestamping
+- FPGA feed-handler integration

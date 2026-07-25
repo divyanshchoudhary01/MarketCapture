@@ -1,0 +1,9 @@
+# Values are supplied by the licensed market-data network provider.
+multicast_group=233.54.12.1
+port=18000
+interface_address=10.20.30.40
+receive_buffer_bytes=16777216
+record_path=capture.ticks
+
+# Set to zero for continuous capture. Use a finite value for acceptance tests.
+max_packets=0

@@ -43,4 +43,4 @@ jobs:
 
       - name: Run Benchmarks
         run: |
-          ./build/benchmarks/MarketCaptureBenchmarks
+          ./build/marketcapture_benchmark 100000
